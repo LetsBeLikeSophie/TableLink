@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: tablelink-postgres
+    environment:
+      POSTGRES_DB: tablelink
+      POSTGRES_USER: tablelink
+      POSTGRES_PASSWORD: tablelink
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

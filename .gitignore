@@ -1,0 +1,25 @@
+### Java / Maven ###
+backend/target/
+*.class
+*.jar
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+### Node / React ###
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Env ###
+.env
+.env.local
