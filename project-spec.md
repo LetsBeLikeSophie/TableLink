@@ -100,6 +100,20 @@ TableMeta {
 - `filterableColumns`: 필터 화면에 노출 가능한 컬럼 화이트리스트. 이 목록에 없는 컬럼명은
   필터 요청 시 서버가 거부함 (SQL 인젝션 방지 — 컬럼명은 PreparedStatement 파라미터 바인딩이
   불가능한 자리라 화이트리스트 검증으로 방어).
+
+### 자동 판정 컨벤션 (수동 등록 대신)
+
+`type` / `historySubType` / `foreignKeys`는 사용자가 직접 입력하지 않고, DB 스키마 조회 +
+네이밍 컨벤션으로 자동 판정한다:
+
+- 테이블명이 `_history`로 끝나면 → `HISTORY`, 아니면 → `STATE`
+- `HISTORY`인 테이블에 `end_date`류(nullable) 컬럼이 있으면 → `RANGE`, 없으면 → `POINT`
+- `foreignKeys`는 `information_schema`(또는 JPA 메타모델)에서 FK 제약조건을 그대로 조회
+
+`filterableColumns`만 자동화하지 않는다 — 필터로 노출해도 되는 컬럼을 고르는 의도적
+화이트리스트이자 SQL 인젝션 방어 장치라서, 전체 컬럼을 무조건 다 넣으면 화이트리스트의
+의미가 없어짐. 기본값은 "PK/FK 제외 전체 컬럼 체크됨" 상태로 제시하고, 사용자가 원치 않는
+컬럼만 체크 해제하는 **확인 화면**으로 둔다 (등록이 아니라 확인/조정).
 - `valueType: CATEGORY`인 컬럼은 필터 UI에서 자유입력 대신 `SELECT DISTINCT` 결과를
   드롭다운으로 보여줌 (오타 방지, 실제 존재값만 노출).
 
@@ -221,10 +235,30 @@ WHERE EXISTS (
 
 ## 5. 화면 플로우 (4단계)
 
-1. **테이블 등록** — 테이블 선택, 타입(STATE/HISTORY) 및 historySubType(POINT/RANGE) 지정, filterableColumns 지정
-2. **관계도 & 조인** — 등록된 FK 기반 관계도 시각화, 드래그앤드롭으로 조인 체인 구성 (FK 연결된 것만 허용)
-3. **필터 (세그먼트 조건)** — 조인 체인에 포함된 테이블의 컬럼만 후보로 노출. 그룹별 OR 조건 추가, 그룹 간 AND로 결합. CATEGORY 타입 컬럼은 `SELECT DISTINCT` 드롭다운
-4. **세그먼트 결과** — 조건을 통과한 고객 리스트 + 요약 통계(대상 수 등)
+1. **테이블 확인** — DB 스키마 조회 + 컨벤션으로 type/historySubType/foreignKeys 자동 판정된 테이블 목록 표시, filterableColumns만 기본값(PK/FK 제외 전체)에서 사용자가 체크 해제로 조정
+
+2. **관계도 & 조인**
+   - 1단계에서 확인된 테이블을 노드로, FK 관계를 엣지로 그래프 표시 (React Flow)
+   - 노드 드래그 시작 시 FK로 연결 가능한 테이블만 하이라이트, 그 외엔 드롭 비활성
+     (연결 안 된 테이블끼리는 애초에 드롭 시도가 안 되도록 사전 안내 — 실패 후 에러 메시지 방식 대신)
+   - 조인 방식(STATE-STATE / STATE-HISTORY / HISTORY-HISTORY)은 `JoinStrategyFactory`가
+     타입 조합을 보고 자동 결정, 사용자 입력 불필요
+   - 예외: STATE-HISTORY 조인은 "최신값만 볼지" 여부가 선택 가능한 지점이라, 엣지에 토글
+     하나만 노출 (기본값 ON = 최신값만)
+   - 결과물: 순서 있는 테이블 체인 → `POST /joins`
+
+3. **필터 (세그먼트 조건)**
+   - 후보 컬럼은 2단계 체인에 포함된 테이블의 `filterableColumns`로 한정
+   - 필터 추가 흐름: 테이블 선택 → 컬럼 선택 → operator(컬럼 valueType에 따라 후보 제한:
+     CATEGORY→EQ/NEQ, DATE→WITHIN_LAST_N_DAYS/OLDER_THAN_N_DAYS/GT/LT, NUMBER→부등호,
+     FREE_TEXT→LIKE) → 값 입력
+   - CATEGORY 타입 컬럼은 값 입력란 대신 `GET /tables/{name}/columns/{column}/distinct-values`
+     결과를 드롭다운으로 표시
+   - "그룹 추가"(그룹 간 AND) / "조건 추가"(그룹 내 OR) 버튼으로 FilterGroup/SegmentQuery 구성
+   - (선택) 생성되는 SQL 미리보기 접기/펼치기 — 7번 성능 트레이드오프 어필 포인트와 연결
+
+4. **세그먼트 결과** — `POST /segments` 호출 → 매칭된 루트 테이블(대부분 customer) row 목록 +
+   요약 통계(대상 수, 전체 대비 %). 더미데이터 규모(30명)상 페이지네이션 없이 리스트로 충분
 
 ---
 
@@ -234,7 +268,10 @@ WHERE EXISTS (
 - **DB**: PostgreSQL
 - **Frontend**: React, 관계도 시각화는 React Flow 계열 라이브러리 검토
 - **API 예시**
-  - `POST /tables` — 테이블 메타데이터 등록
+  - `GET /tables/discover` — DB 스키마 조회 + 컨벤션으로 type/historySubType/foreignKeys
+    자동 판정된 테이블 목록 반환 (필터 화면 확인용, 등록 아님)
+  - `POST /tables/{name}/filterable-columns` — 자동 판정 결과 중 filterableColumns만
+    사용자가 조정한 값으로 저장
   - `POST /joins` — 조인 체인 등록 (드래그앤드롭으로 이어진 테이블 순서)
   - `POST /segments` — 필터(SegmentQuery) 적용 → 세그먼트 결과 조회
   - `GET /tables/{name}/columns/{column}/distinct-values` — CATEGORY 컬럼 드롭다운용
@@ -270,6 +307,11 @@ WHERE EXISTS (
 - 그룹 무한 중첩 트리 (그룹 내 OR, 그룹 간 AND 2단계로 제한)
 - 그래프 자동 경로 탐색 (드래그앤드롭 UX 제약으로 대체)
 - 조인 체인 밖 테이블의 필터링 (조인 체인에 포함된 테이블만 필터 후보)
+- **언피벗/EAV형 테이블** (예: `metric_name, metric_value`처럼 속성 이름 자체가 값으로 들어가
+  여러 지표가 한 컬럼에 섞이는 구조). 이런 테이블은 필터링하려면 동적 PIVOT 로직이 필요해서
+  filterableColumns 화이트리스트 모델 자체가 안 맞음. STATE/HISTORY 두 축으로 스코프 고정.
+  (참고: 주문이력처럼 단일 속성(예: `status`)이 시간에 따라 바뀌는 로그는 EAV가 아니라
+  기존 POINT-type HISTORY로 정상 커버됨 — 새 타입 불필요)
 
 ---
 
