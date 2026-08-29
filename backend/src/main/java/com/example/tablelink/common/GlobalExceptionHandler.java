@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.example.tablelink.join.JoinValidationException;
 import com.example.tablelink.tablemeta.TableMetaValidationException;
 
 @RestControllerAdvice
@@ -16,6 +17,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TableMetaValidationException.class)
     public ResponseEntity<Map<String, String>> handleTableMetaValidation(TableMetaValidationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(JoinValidationException.class)
+    public ResponseEntity<Map<String, String>> handleJoinValidation(JoinValidationException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("message", ex.getMessage()));
     }

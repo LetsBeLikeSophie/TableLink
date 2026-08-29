@@ -6,6 +6,19 @@ export async function fetchDiscoveredTables() {
   return res.json()
 }
 
+export async function buildJoinChain(edges) {
+  const res = await fetch('/joins', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ edges }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.message || `조인 체인 생성 실패 (HTTP ${res.status})`)
+  }
+  return res.json()
+}
+
 export async function saveFilterableColumns(tableName, filterableColumns) {
   const res = await fetch(`/tables/${encodeURIComponent(tableName)}/filterable-columns`, {
     method: 'POST',

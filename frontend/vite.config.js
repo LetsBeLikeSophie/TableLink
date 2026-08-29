@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/tables': 'http://localhost:8080',
+      '/joins': 'http://localhost:8080',
     },
   },
 })

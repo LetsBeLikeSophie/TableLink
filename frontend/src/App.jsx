@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { fetchDiscoveredTables, saveFilterableColumns } from './api'
+import JoinGraphStep from './JoinGraphStep'
 
 const STEPS = ['테이블 확인', '관계도 & 조인', '필터 (세그먼트)', '결과']
 
@@ -182,7 +183,7 @@ function App() {
 
       <main className="content">
         {step === 0 && <TableConfirmStep />}
-        {step === 1 && <PlaceholderStep title="관계도 & 조인" />}
+        {step === 1 && <JoinGraphStep />}
         {step === 2 && <PlaceholderStep title="필터 (세그먼트)" />}
         {step === 3 && <PlaceholderStep title="결과" />}
       </main>

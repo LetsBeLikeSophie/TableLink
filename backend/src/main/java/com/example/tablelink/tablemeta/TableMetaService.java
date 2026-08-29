@@ -13,8 +13,8 @@ import com.example.tablelink.tablemeta.dto.FilterableColumnDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnsUpdateRequest;
 import com.example.tablelink.tablemeta.dto.ForeignKeyDto;
 import com.example.tablelink.tablemeta.schema.ColumnInfo;
-import com.example.tablelink.tablemeta.schema.ForeignKeyInfo;
-import com.example.tablelink.tablemeta.schema.SchemaIntrospectionRepository;
+import com.example.tablelink.tablemeta.schema.ResolvedTable;
+import com.example.tablelink.tablemeta.schema.TableSchemaResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,31 +23,27 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class TableMetaService {
 
-    private static final String HISTORY_SUFFIX = "_history";
-    private static final String END_DATE_COLUMN = "end_date";
-
     private static final Set<String> DATE_SQL_TYPES = Set.of(
             "date", "timestamp without time zone", "timestamp with time zone");
     private static final Set<String> NUMBER_SQL_TYPES = Set.of(
             "bigint", "integer", "smallint", "numeric", "decimal", "double precision", "real");
 
     private final TableMetaRepository tableMetaRepository;
-    private final SchemaIntrospectionRepository schemaIntrospectionRepository;
+    private final TableSchemaResolver tableSchemaResolver;
 
     public List<DiscoveredTableDto> discoverTables() {
-        return schemaIntrospectionRepository.findTableNames().stream()
+        return tableSchemaResolver.findTableNames().stream()
                 .map(this::discoverTable)
                 .toList();
     }
 
     @Transactional
     public DiscoveredTableDto updateFilterableColumns(String tableName, FilterableColumnsUpdateRequest request) {
-        Set<String> validColumns = schemaIntrospectionRepository.findColumns(tableName).stream()
-                .map(ColumnInfo::name)
-                .collect(Collectors.toSet());
-        if (validColumns.isEmpty()) {
+        ResolvedTable table = tableSchemaResolver.resolve(tableName);
+        if (table == null) {
             throw new TableMetaValidationException("존재하지 않는 테이블입니다: " + tableName);
         }
+        Set<String> validColumns = table.columns().stream().map(ColumnInfo::name).collect(Collectors.toSet());
         for (FilterableColumnDto column : request.filterableColumns()) {
             if (!validColumns.contains(column.column())) {
                 throw new TableMetaValidationException(
@@ -70,42 +66,13 @@ public class TableMetaService {
     }
 
     private DiscoveredTableDto discoverTable(String tableName) {
-        List<ColumnInfo> columns = schemaIntrospectionRepository.findColumns(tableName);
-        String primaryKey = schemaIntrospectionRepository.findPrimaryKeyColumn(tableName);
-        List<ForeignKeyInfo> foreignKeys = schemaIntrospectionRepository.findForeignKeys(tableName);
-        Set<String> foreignKeyColumns = foreignKeys.stream()
-                .map(ForeignKeyInfo::column)
-                .collect(Collectors.toSet());
+        ResolvedTable table = tableSchemaResolver.resolve(tableName);
 
-        TableType type = tableName.endsWith(HISTORY_SUFFIX) ? TableType.HISTORY : TableType.STATE;
-        HistorySubType historySubType = null;
-        String dateColumn = null;
-        String endDateColumn = null;
-
-        if (type == TableType.HISTORY) {
-            List<String> dateColumnNames = columns.stream()
-                    .filter(c -> DATE_SQL_TYPES.contains(c.sqlType()))
-                    .map(ColumnInfo::name)
-                    .toList();
-            boolean hasEndDate = dateColumnNames.contains(END_DATE_COLUMN);
-            if (hasEndDate) {
-                historySubType = HistorySubType.RANGE;
-                endDateColumn = END_DATE_COLUMN;
-                dateColumn = dateColumnNames.stream()
-                        .filter(name -> !name.equals(END_DATE_COLUMN))
-                        .findFirst()
-                        .orElse(null);
-            } else {
-                historySubType = HistorySubType.POINT;
-                dateColumn = dateColumnNames.stream().findFirst().orElse(null);
-            }
-        }
-
-        List<ForeignKeyDto> foreignKeyDtos = foreignKeys.stream()
+        List<ForeignKeyDto> foreignKeyDtos = table.foreignKeys().stream()
                 .map(fk -> new ForeignKeyDto(fk.column(), fk.refTable(), fk.refColumn()))
                 .toList();
 
-        List<FilterableColumnDto> availableColumns = defaultFilterableColumns(columns, primaryKey, foreignKeyColumns);
+        List<FilterableColumnDto> availableColumns = defaultFilterableColumns(table);
 
         var saved = tableMetaRepository.findByTableName(tableName);
         List<FilterableColumnDto> filterableColumns;
@@ -120,14 +87,17 @@ public class TableMetaService {
             confirmed = false;
         }
 
-        return new DiscoveredTableDto(tableName, type, historySubType, primaryKey, dateColumn, endDateColumn,
-                foreignKeyDtos, availableColumns, filterableColumns, confirmed);
+        return new DiscoveredTableDto(table.tableName(), table.type(), table.historySubType(), table.primaryKey(),
+                table.dateColumn(), table.endDateColumn(), foreignKeyDtos, availableColumns, filterableColumns,
+                confirmed);
     }
 
-    private List<FilterableColumnDto> defaultFilterableColumns(
-            List<ColumnInfo> columns, String primaryKey, Set<String> foreignKeyColumns) {
-        return columns.stream()
-                .filter(c -> !c.name().equals(primaryKey) && !foreignKeyColumns.contains(c.name()))
+    private List<FilterableColumnDto> defaultFilterableColumns(ResolvedTable table) {
+        Set<String> foreignKeyColumns = table.foreignKeys().stream()
+                .map(fk -> fk.column())
+                .collect(Collectors.toSet());
+        return table.columns().stream()
+                .filter(c -> !c.name().equals(table.primaryKey()) && !foreignKeyColumns.contains(c.name()))
                 .map(c -> new FilterableColumnDto(c.name(), inferValueType(c.sqlType())))
                 .toList();
     }
