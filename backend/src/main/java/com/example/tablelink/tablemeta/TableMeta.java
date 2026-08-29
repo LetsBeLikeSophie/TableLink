@@ -7,8 +7,6 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -18,6 +16,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Stores only the user-curated filterableColumns whitelist for a table.
+ * type/historySubType/primaryKey/dateColumn/endDateColumn/foreignKeys are
+ * derived live from the DB schema (see SchemaIntrospectionRepository) instead
+ * of being persisted here.
+ */
 @Entity
 @Table(name = "table_meta")
 @Getter
@@ -31,27 +35,6 @@ public class TableMeta {
 
     @Column(name = "table_name", nullable = false, unique = true)
     private String tableName;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "table_type", nullable = false)
-    private TableType type;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "history_sub_type")
-    private HistorySubType historySubType;
-
-    @Column(name = "primary_key_column", nullable = false)
-    private String primaryKey;
-
-    @Column(name = "date_column")
-    private String dateColumn;
-
-    @Column(name = "end_date_column")
-    private String endDateColumn;
-
-    @ElementCollection
-    @CollectionTable(name = "table_meta_foreign_key", joinColumns = @JoinColumn(name = "table_meta_id"))
-    private List<ForeignKeyRef> foreignKeys = new ArrayList<>();
 
     @ElementCollection
     @CollectionTable(name = "table_meta_filterable_column", joinColumns = @JoinColumn(name = "table_meta_id"))

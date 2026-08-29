@@ -57,22 +57,13 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 
 -- Table metadata registry (see project-spec.md section 2)
+-- type/historySubType/primaryKey/dateColumn/endDateColumn/foreignKeys are derived
+-- live from information_schema (see SchemaIntrospectionRepository) rather than
+-- stored here; table_meta only persists the user-curated filterableColumns whitelist.
 
 CREATE TABLE IF NOT EXISTS table_meta (
     id BIGSERIAL PRIMARY KEY,
-    table_name VARCHAR(100) NOT NULL UNIQUE,
-    table_type VARCHAR(20) NOT NULL,
-    history_sub_type VARCHAR(20),
-    primary_key_column VARCHAR(100) NOT NULL,
-    date_column VARCHAR(100),
-    end_date_column VARCHAR(100)
-);
-
-CREATE TABLE IF NOT EXISTS table_meta_foreign_key (
-    table_meta_id BIGINT REFERENCES table_meta(id),
-    fk_column VARCHAR(100),
-    ref_table VARCHAR(100),
-    ref_column VARCHAR(100)
+    table_name VARCHAR(100) NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS table_meta_filterable_column (

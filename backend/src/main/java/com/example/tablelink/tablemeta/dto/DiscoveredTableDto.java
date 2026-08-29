@@ -5,8 +5,7 @@ import java.util.List;
 import com.example.tablelink.tablemeta.HistorySubType;
 import com.example.tablelink.tablemeta.TableType;
 
-public record TableMetaResponse(
-        Long id,
+public record DiscoveredTableDto(
         String tableName,
         TableType type,
         HistorySubType historySubType,
@@ -14,6 +13,8 @@ public record TableMetaResponse(
         String dateColumn,
         String endDateColumn,
         List<ForeignKeyDto> foreignKeys,
-        List<FilterableColumnDto> filterableColumns
+        List<FilterableColumnDto> availableColumns,
+        List<FilterableColumnDto> filterableColumns,
+        boolean filterableColumnsConfirmed
 ) {
 }

@@ -140,3 +140,141 @@
 .empty-box.tall {
   padding: 64px 16px;
 }
+
+.error-banner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #e5484d;
+  background: rgba(229, 72, 77, 0.1);
+  color: #e5484d;
+  font-size: 13px;
+}
+
+.table-confirm-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.table-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.table-list-item:hover {
+  border-color: var(--border);
+}
+
+.table-list-item.active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--text-h);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-confirmed {
+  background: rgba(48, 164, 108, 0.15);
+  color: #30a46c;
+}
+
+.badge-default {
+  background: var(--border);
+  color: var(--text);
+}
+
+.badge-type {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.badge-subtype {
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.table-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fk-chip {
+  font-size: 12px;
+  font-family: var(--mono);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.column-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.column-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.column-check-row:hover {
+  background: var(--code-bg);
+}
+
+.column-check-row span:nth-child(2) {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 13px;
+}
