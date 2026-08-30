@@ -104,6 +104,21 @@
   font-size: 13px;
 }
 
+.info-banner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+.join-node-bridge {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
 .panel h2 {
   margin: 0 0 4px;
 }

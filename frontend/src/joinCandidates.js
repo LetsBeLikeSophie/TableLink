@@ -40,3 +40,94 @@ export function joinTypeOf(a, b) {
   if (a.type === 'STATE' && b.type === 'STATE') return 'STATE_STATE'
   return 'STATE_HISTORY'
 }
+
+function buildGraph(tables) {
+  const graph = {}
+  tables.forEach((t) => {
+    graph[t.tableName] = []
+  })
+  for (let i = 0; i < tables.length; i++) {
+    for (let j = i + 1; j < tables.length; j++) {
+      if (isConnectable(tables[i], tables[j])) {
+        graph[tables[i].tableName].push(tables[j].tableName)
+        graph[tables[j].tableName].push(tables[i].tableName)
+      }
+    }
+  }
+  return graph
+}
+
+/** BFS shortest path between two tables over the full FK/shared-key graph. */
+function shortestPath(graph, start, end) {
+  if (start === end) return [start]
+  const visited = new Set([start])
+  const queue = [[start]]
+  while (queue.length > 0) {
+    const path = queue.shift()
+    const node = path[path.length - 1]
+    for (const neighbor of graph[node] || []) {
+      if (neighbor === end) return [...path, neighbor]
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor)
+        queue.push([...path, neighbor])
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Greedy Steiner-tree approximation: given a set of tables the user actually
+ * wants (from selected filter conditions, or manually placed), finds the
+ * smallest set of extra "bridge" tables needed to connect them all, and the
+ * ordered edges to do it. At each step it merges in whichever required table
+ * has the shortest path to the tree built so far, repeating until every
+ * required table is connected. For this schema's graph (a small, densely
+ * connected hub around `vehicle`) this reliably finds the true minimal
+ * bridge set, not just "some" connecting path.
+ */
+export function computeConnectingPlan(tables, requiredTableNames) {
+  const tableByName = {}
+  tables.forEach((t) => {
+    tableByName[t.tableName] = t
+  })
+  const graph = buildGraph(tables)
+  const required = [...new Set(requiredTableNames)].filter((name) => graph[name])
+
+  if (required.length === 0) {
+    return { tables: [], edges: [], bridgeTables: [] }
+  }
+
+  const included = new Set([required[0]])
+  const edges = []
+  const remaining = new Set(required.slice(1))
+
+  while (remaining.size > 0) {
+    let best = null
+    for (const target of remaining) {
+      for (const source of included) {
+        const path = shortestPath(graph, source, target)
+        if (path && (!best || path.length < best.path.length)) {
+          best = { path, target }
+        }
+      }
+    }
+    if (!best) break // target unreachable from the rest of the graph
+    for (let i = 1; i < best.path.length; i++) {
+      const from = best.path[i - 1]
+      const to = best.path[i]
+      if (!included.has(to)) {
+        const type = joinTypeOf(tableByName[from], tableByName[to])
+        edges.push({ fromTable: from, toTable: to, latestOnly: type === 'STATE_HISTORY' })
+        included.add(to)
+      }
+    }
+    remaining.delete(best.target)
+  }
+
+  const includedTables = [...included]
+  const bridgeTables = includedTables.filter((t) => !required.includes(t))
+  const unreachable = [...remaining]
+
+  return { tables: includedTables, edges, bridgeTables, unreachable }
+}

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { fetchDiscoveredTables } from './api'
-import TableConfirmStep from './TableConfirmStep'
 import FieldConditionStep from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 
-const STEPS = ['테이블 확인', '조건 선택', '관계도 & 조인', '결과']
+const STEPS = ['조건 선택', '관계도 & 조인', '결과']
 
 function PlaceholderStep({ title }) {
   return (
@@ -18,7 +17,7 @@ function PlaceholderStep({ title }) {
 }
 
 function PreviewSidebar({ step, preview }) {
-  if (step === 1) {
+  if (step === 0) {
     return (
       <aside className="preview-sidebar">
         <h3>데이터 미리보기</h3>
@@ -29,7 +28,7 @@ function PreviewSidebar({ step, preview }) {
     )
   }
 
-  if (step === 3) {
+  if (step === 2) {
     return (
       <aside className="preview-sidebar">
         <h3>데이터 미리보기</h3>
@@ -41,7 +40,7 @@ function PreviewSidebar({ step, preview }) {
   return (
     <aside className="preview-sidebar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
-      {!preview && <div className="empty-box">테이블을 선택하면 표시됩니다.</div>}
+      {!preview && <div className="empty-box">테이블을 연결하면 표시됩니다.</div>}
       {preview?.loading && <div className="empty-box">불러오는 중...</div>}
       {preview?.error && <div className="error-banner">{preview.error}</div>}
       {preview && !preview.loading && !preview.error && preview.columns && (
@@ -116,27 +115,20 @@ function App() {
           ) : (
             <>
               {step === 0 && (
-                <TableConfirmStep
-                  tables={tables}
-                  refreshTables={refreshTables}
-                  onPreviewChange={handlePreviewChange}
-                />
-              )}
-              {step === 1 && (
                 <FieldConditionStep
                   tables={tables}
                   conditions={fieldConditions}
                   onConditionsChange={setFieldConditions}
                 />
               )}
-              {step === 2 && (
+              {step === 1 && (
                 <JoinGraphStep
                   tables={tables}
                   initialTables={initialJoinTables}
                   onPreviewChange={handlePreviewChange}
                 />
               )}
-              {step === 3 && <PlaceholderStep title="결과" />}
+              {step === 2 && <PlaceholderStep title="결과" />}
             </>
           )}
         </div>

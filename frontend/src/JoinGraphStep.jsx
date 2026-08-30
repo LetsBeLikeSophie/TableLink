@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ReactFlow, Background, Controls, ReactFlowProvider, useReactFlow, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { buildJoinChain } from './api'
-import { isConnectable, joinTypeOf } from './joinCandidates'
+import { computeConnectingPlan, joinTypeOf } from './joinCandidates'
 
 const JOIN_TYPE_LABEL = {
   STATE_STATE: 'STATE-STATE',
@@ -28,8 +28,8 @@ function JoinGraphStep({ tables, initialTables, onPreviewChange }) {
     <div className="panel">
       <h2>관계도 &amp; 조인</h2>
       <p className="hint">
-        왼쪽 목록에서 테이블을 캔버스로 드래그하면, 이미 놓인 테이블 중 연결 가능한 것에 자동으로 이어집니다.
-        캔버스의 노드를 클릭해서 선택한 뒤 Delete/Backspace로 제거할 수 있어요.
+        왼쪽 목록에서 테이블을 캔버스로 드래그하면, 연결에 필요한 중간 테이블까지 자동으로 찾아서
+        이어줍니다. 캔버스의 노드를 클릭해서 선택한 뒤 Delete/Backspace로 제거할 수 있어요.
       </p>
       <ReactFlowProvider>
         <JoinBuilder tables={tables} initialTables={initialTables} onPreviewChange={onPreviewChange} />
@@ -41,10 +41,9 @@ function JoinGraphStep({ tables, initialTables, onPreviewChange }) {
 function JoinBuilder({ tables, initialTables, onPreviewChange }) {
   const { screenToFlowPosition } = useReactFlow()
 
-  const [placedTables, setPlacedTables] = useState([])
+  const [requiredTables, setRequiredTables] = useState([])
   const [nodePositions, setNodePositions] = useState({})
-  const [edges, setEdges] = useState([]) // [{fromTable, toTable, latestOnly}], toTable is unique
-  const [connectingFrom, setConnectingFrom] = useState(null)
+  const [latestOnlyOverrides, setLatestOnlyOverrides] = useState({})
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState(null)
@@ -57,64 +56,54 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
     return map
   }, [tables])
 
-  const connectedSet = useMemo(() => new Set(edges.map((e) => e.toTable)), [edges])
-
-  const addEdge = useCallback(
-    (fromTable, toTable) => {
-      setEdges((prev) => {
-        if (prev.some((e) => e.toTable === toTable)) return prev
-        const type = joinTypeOf(tableByName[fromTable], tableByName[toTable])
-        return [...prev, { fromTable, toTable, latestOnly: type === 'STATE_HISTORY' }]
-      })
-    },
-    [tableByName],
-  )
-
-  const placeTable = useCallback((tableName, position) => {
-    setPlacedTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
-    setNodePositions((prev) => ({ ...prev, [tableName]: position }))
-  }, [])
-
-  // Auto-place tables handed in from the field/condition step (once per new table).
+  // Pull in tables required by the field/condition step (additive — never removes
+  // a table the user has since deleted here).
   useEffect(() => {
     if (!initialTables || initialTables.length === 0) return
-    initialTables.forEach((tableName, i) => {
-      if (!tableByName[tableName]) return
-      setPlacedTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
-      setNodePositions((prev) =>
-        prev[tableName] ? prev : { ...prev, [tableName]: { x: (i % 4) * 220, y: Math.floor(i / 4) * 160 } },
-      )
+    setRequiredTables((prev) => {
+      const additions = initialTables.filter((t) => tableByName[t] && !prev.includes(t))
+      return additions.length > 0 ? [...prev, ...additions] : prev
     })
   }, [initialTables, tableByName])
 
-  // Reconciliation pass: whenever the placed/connected set changes, try to
-  // connect any still-unconnected table to whatever is now reachable. This
-  // catches cases a single "connect the new node" pass would miss — e.g.
-  // customer and service_history are both placed but only linkable via
-  // vehicle; once vehicle connects to one of them, this re-check lets the
-  // other attach too, instead of only ever checking the table just dropped.
-  useEffect(() => {
-    const root = placedTables[0]
-    if (!root) return
-    const reachable = new Set([root, ...edges.map((e) => e.toTable)])
-    for (const t of placedTables) {
-      if (reachable.has(t)) continue
-      const parent = placedTables.find((p) => reachable.has(p) && isConnectable(tableByName[p], tableByName[t]))
-      if (parent) {
-        addEdge(parent, t)
-        break
-      }
-    }
-  }, [placedTables, edges, tableByName, addEdge])
+  const plan = useMemo(() => computeConnectingPlan(tables, requiredTables), [tables, requiredTables])
 
-  const removeTable = useCallback((tableName) => {
-    setPlacedTables((prev) => prev.filter((t) => t !== tableName))
-    setEdges((prev) => prev.filter((e) => e.fromTable !== tableName && e.toTable !== tableName))
+  const edges = useMemo(
+    () =>
+      plan.edges.map((e) => ({
+        ...e,
+        latestOnly: latestOnlyOverrides[e.toTable] ?? e.latestOnly,
+      })),
+    [plan.edges, latestOnlyOverrides],
+  )
+
+  // Assign a canvas position the first time a table appears in the plan.
+  useEffect(() => {
     setNodePositions((prev) => {
+      let changed = false
       const next = { ...prev }
-      delete next[tableName]
-      return next
+      plan.tables.forEach((t, i) => {
+        if (!next[t]) {
+          next[t] = { x: (i % 4) * 220, y: Math.floor(i / 4) * 160 }
+          changed = true
+        }
+      })
+      return changed ? next : prev
     })
+  }, [plan.tables])
+
+  const addRequiredTable = useCallback(
+    (tableName, position) => {
+      setRequiredTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
+      if (position) {
+        setNodePositions((prev) => ({ ...prev, [tableName]: position }))
+      }
+    },
+    [],
+  )
+
+  const removeRequiredTable = useCallback((tableName) => {
+    setRequiredTables((prev) => prev.filter((t) => t !== tableName))
   }, [])
 
   const onDrop = useCallback(
@@ -123,9 +112,9 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
       const tableName = event.dataTransfer.getData('application/tablelink-table')
       if (!tableName) return
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      placeTable(tableName, position)
+      addRequiredTable(tableName, position)
     },
-    [placeTable, screenToFlowPosition],
+    [addRequiredTable, screenToFlowPosition],
   )
 
   const onDragOver = useCallback((event) => {
@@ -137,41 +126,21 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
     (changes) => {
       changes.forEach((change) => {
         if (change.type === 'remove') {
-          removeTable(change.id)
+          removeRequiredTable(change.id)
         } else if (change.type === 'position' && change.position) {
           setNodePositions((prev) => ({ ...prev, [change.id]: change.position }))
         }
       })
     },
-    [removeTable],
+    [removeRequiredTable],
   )
 
-  const onConnectStart = useCallback((_, { nodeId }) => setConnectingFrom(nodeId), [])
-  const onConnectEnd = useCallback(() => setConnectingFrom(null), [])
-
-  const onConnect = useCallback(
-    (connection) => {
-      const from = tableByName[connection.source]
-      const to = tableByName[connection.target]
-      if (!from || !to || !isConnectable(from, to)) return
-      addEdge(connection.source, connection.target)
-    },
-    [tableByName, addEdge],
-  )
-
-  const toggleLatestOnly = (toTable) => {
-    setEdges((prev) => prev.map((e) => (e.toTable === toTable ? { ...e, latestOnly: !e.latestOnly } : e)))
+  const toggleLatestOnly = (toTable, defaultValue) => {
+    setLatestOnlyOverrides((prev) => ({
+      ...prev,
+      [toTable]: !(prev[toTable] ?? defaultValue),
+    }))
   }
-
-  const validTargetIds = useMemo(() => {
-    if (!connectingFrom || !tableByName[connectingFrom]) return null
-    const from = tableByName[connectingFrom]
-    return new Set(
-      placedTables.filter(
-        (t) => t !== connectingFrom && !connectedSet.has(t) && isConnectable(from, tableByName[t]),
-      ),
-    )
-  }, [connectingFrom, placedTables, tableByName, connectedSet])
 
   useEffect(() => {
     if (edges.length === 0) {
@@ -195,26 +164,23 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
 
   useEffect(() => {
     if (!onPreviewChange) return
-    onPreviewChange({ title: '조인 결과', loading: previewLoading, error: previewError, sql: preview?.sql ?? null, columns: preview?.previewColumns ?? null, rows: preview?.previewRows ?? null })
+    onPreviewChange({
+      title: '조인 결과',
+      loading: previewLoading,
+      error: previewError,
+      sql: preview?.sql ?? null,
+      columns: preview?.previewColumns ?? null,
+      rows: preview?.previewRows ?? null,
+    })
   }, [preview, previewLoading, previewError, onPreviewChange])
 
   const nodes = useMemo(
     () =>
-      placedTables.map((t) => {
+      plan.tables.map((t) => {
         const table = tableByName[t]
-        const isRoot = t === placedTables[0]
-        const connected = isRoot || connectedSet.has(t)
+        const isBridge = plan.bridgeTables.includes(t)
         let className = `join-node ${table.type === 'STATE' ? 'join-node-state' : 'join-node-history'}`
-        if (!connected) className += ' join-node-unconnected'
-        if (validTargetIds) {
-          if (t === connectingFrom) {
-            // leave as-is
-          } else if (validTargetIds.has(t)) {
-            className += ' join-node-valid-target'
-          } else {
-            className += ' join-node-dimmed'
-          }
-        }
+        if (isBridge) className += ' join-node-bridge'
         return {
           id: t,
           position: nodePositions[t] || { x: 40, y: 40 },
@@ -222,42 +188,10 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
           className,
         }
       }),
-    [placedTables, tableByName, nodePositions, connectedSet, validTargetIds, connectingFrom],
+    [plan, tableByName, nodePositions],
   )
 
-  const unconnectedCount = useMemo(
-    () => placedTables.filter((t, i) => i > 0 && !connectedSet.has(t)).length,
-    [placedTables, connectedSet],
-  )
-
-  const hasEdgeBetween = useCallback(
-    (a, b) => edges.some((e) => (e.fromTable === a && e.toTable === b) || (e.fromTable === b && e.toTable === a)),
-    [edges],
-  )
-
-  const suggestedEdges = useMemo(() => {
-    const result = []
-    for (let i = 0; i < placedTables.length; i++) {
-      for (let j = i + 1; j < placedTables.length; j++) {
-        const a = placedTables[i]
-        const b = placedTables[j]
-        if (hasEdgeBetween(a, b)) continue
-        if (isConnectable(tableByName[a], tableByName[b])) {
-          result.push({
-            id: `suggested-${a}-${b}`,
-            source: a,
-            target: b,
-            type: 'straight',
-            selectable: false,
-            style: { stroke: 'var(--border)', strokeDasharray: '4 4' },
-          })
-        }
-      }
-    }
-    return result
-  }, [placedTables, hasEdgeBetween, tableByName])
-
-  const chainReactFlowEdges = useMemo(
+  const reactFlowEdges = useMemo(
     () =>
       edges.map((e) => ({
         id: `chain-${e.fromTable}-${e.toTable}`,
@@ -273,10 +207,15 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
 
   return (
     <>
-      {unconnectedCount > 0 && (
+      {plan.bridgeTables.length > 0 && (
+        <div className="info-banner">
+          연결을 위해 다음 테이블을 자동으로 추가했어요:{' '}
+          <strong>{plan.bridgeTables.join(', ')}</strong>
+        </div>
+      )}
+      {plan.unreachable && plan.unreachable.length > 0 && (
         <div className="warning-banner">
-          연결되지 않은 테이블이 {unconnectedCount}개 있어요. 직접 이어지는 키가 없는 것 같아요 — 중간 테이블을
-          하나 더 드래그해서 이어주세요.
+          {plan.unreachable.join(', ')}은(는) 다른 테이블과 연결할 수 있는 키가 없어요.
         </div>
       )}
 
@@ -285,7 +224,7 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
           <h3>테이블</h3>
           <ul className="table-list">
             {tables.map((t) => {
-              const placed = placedTables.includes(t.tableName)
+              const placed = plan.tables.includes(t.tableName)
               return (
                 <li key={t.tableName}>
                   <div
@@ -306,14 +245,11 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
         </div>
 
         <div className="join-canvas" onDrop={onDrop} onDragOver={onDragOver}>
-          {placedTables.length === 0 && <div className="join-canvas-hint">여기로 테이블을 드래그하세요</div>}
+          {plan.tables.length === 0 && <div className="join-canvas-hint">여기로 테이블을 드래그하세요</div>}
           <ReactFlow
             nodes={nodes}
-            edges={[...suggestedEdges, ...chainReactFlowEdges]}
+            edges={reactFlowEdges}
             onNodesChange={onNodesChange}
-            onConnect={onConnect}
-            onConnectStart={onConnectStart}
-            onConnectEnd={onConnectEnd}
             proOptions={{ hideAttribution: true }}
           >
             <Background />
@@ -337,7 +273,11 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
                   </div>
                   {type === 'STATE_HISTORY' && (
                     <label className="latest-only-toggle">
-                      <input type="checkbox" checked={e.latestOnly} onChange={() => toggleLatestOnly(e.toTable)} />
+                      <input
+                        type="checkbox"
+                        checked={e.latestOnly}
+                        onChange={() => toggleLatestOnly(e.toTable, e.latestOnly)}
+                      />
                       최신값만
                     </label>
                   )}
