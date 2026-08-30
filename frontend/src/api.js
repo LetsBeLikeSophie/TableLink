@@ -1,5 +1,15 @@
+// In dev, Vite's own base ('/') means requests go straight to the proxy
+// config below. In the production build (base: '/tablelink/'), requests
+// need the '/tablelink/api' prefix that nginx strips before proxying to
+// the backend — see the deploy notes in project-spec.md.
+const API_BASE = import.meta.env.BASE_URL === '/' ? '' : `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api`
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`
+}
+
 export async function fetchDiscoveredTables() {
-  const res = await fetch('/tables/discover')
+  const res = await fetch(apiUrl('/tables/discover'))
   if (!res.ok) {
     throw new Error(`테이블 목록을 불러오지 못했습니다 (HTTP ${res.status})`)
   }
@@ -7,7 +17,7 @@ export async function fetchDiscoveredTables() {
 }
 
 export async function fetchTablePreview(tableName) {
-  const res = await fetch(`/tables/${encodeURIComponent(tableName)}/preview`)
+  const res = await fetch(apiUrl(`/tables/${encodeURIComponent(tableName)}/preview`))
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.message || `미리보기 조회 실패 (HTTP ${res.status})`)
@@ -16,7 +26,9 @@ export async function fetchTablePreview(tableName) {
 }
 
 export async function fetchColumnDomain(tableName, column) {
-  const res = await fetch(`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(column)}/domain`)
+  const res = await fetch(
+    apiUrl(`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(column)}/domain`),
+  )
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.message || `값 조회 실패 (HTTP ${res.status})`)
@@ -25,7 +37,7 @@ export async function fetchColumnDomain(tableName, column) {
 }
 
 export async function buildJoinChain(rootTable, edges, filters = []) {
-  const res = await fetch('/joins', {
+  const res = await fetch(apiUrl('/joins'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rootTable, edges, filters }),
@@ -38,7 +50,7 @@ export async function buildJoinChain(rootTable, edges, filters = []) {
 }
 
 export async function runSegment(rootTable, edges, filters = []) {
-  const res = await fetch('/segments', {
+  const res = await fetch(apiUrl('/segments'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rootTable, edges, filters }),
@@ -51,7 +63,7 @@ export async function runSegment(rootTable, edges, filters = []) {
 }
 
 export async function saveFilterableColumns(tableName, filterableColumns) {
-  const res = await fetch(`/tables/${encodeURIComponent(tableName)}/filterable-columns`, {
+  const res = await fetch(apiUrl(`/tables/${encodeURIComponent(tableName)}/filterable-columns`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filterableColumns }),
