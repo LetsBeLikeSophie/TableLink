@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { fetchColumnDomain } from './api'
 
-const OPERATORS_BY_VALUE_TYPE = {
+export const OPERATORS_BY_VALUE_TYPE = {
   CATEGORY: ['EQ', 'NEQ', 'IS_NULL', 'IS_NOT_NULL'],
   FREE_TEXT: ['EQ', 'NEQ', 'LIKE', 'IS_NULL', 'IS_NOT_NULL'],
   NUMBER: ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IS_NULL', 'IS_NOT_NULL'],
@@ -59,6 +59,10 @@ function DomainHint({ domainState, onHover }) {
 function FieldConditionStep({ tables, conditions, onConditionsChange }) {
   const [query, setQuery] = useState('')
   const [domains, setDomains] = useState({})
+  // Tracks which columns have already been fetched (or are in flight) so
+  // re-hovering a field doesn't re-request its domain every time — domain
+  // data doesn't change during a session, so once is enough.
+  const requestedDomainsRef = useRef(new Set())
 
   const allFields = useMemo(() => {
     const list = []
@@ -81,12 +85,9 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
 
   const ensureDomain = (tableName, column) => {
     const key = fieldKey(tableName, column)
-    setDomains((prev) => {
-      if (prev[key]) return prev
-      return { ...prev, [key]: { loading: true } }
-    })
-    // Skip if it was already requested (guard against the state batch above not
-    // having landed yet on rapid re-hovers) — a cheap re-fetch is harmless anyway.
+    if (requestedDomainsRef.current.has(key)) return
+    requestedDomainsRef.current.add(key)
+    setDomains((prev) => ({ ...prev, [key]: { loading: true } }))
     fetchColumnDomain(tableName, column)
       .then((data) => {
         setDomains((prev) => ({ ...prev, [key]: { loading: false, data } }))
@@ -98,7 +99,10 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
           }
         }
       })
-      .catch((e) => setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } })))
+      .catch((e) => {
+        requestedDomainsRef.current.delete(key) // let a later hover retry after a transient failure
+        setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } }))
+      })
   }
 
   const addField = (field) => {

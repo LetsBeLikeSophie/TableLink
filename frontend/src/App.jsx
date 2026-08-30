@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { fetchDiscoveredTables } from './api'
-import FieldConditionStep from './FieldConditionStep'
+import FieldConditionStep, { OPERATORS_BY_VALUE_TYPE } from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 
@@ -16,7 +16,7 @@ function PlaceholderStep({ title }) {
   )
 }
 
-function DataPreviewBar({ preview }) {
+function DataPreviewBar({ preview, filterableColumns, selectedColumns, onColumnClick }) {
   return (
     <div className="data-preview-bar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
@@ -24,7 +24,18 @@ function DataPreviewBar({ preview }) {
       {preview?.loading && <div className="empty-box">불러오는 중...</div>}
       {preview?.error && <div className="error-banner">{preview.error}</div>}
       {preview && !preview.loading && !preview.error && preview.columns && (
-        <DataPreviewTable columns={preview.columns} rows={preview.rows} />
+        <>
+          <p className="data-preview-hint">
+            컬럼 이름을 클릭하면 필터 조건으로 담기거나 뺄 수 있어요 (필터 가능한 컬럼만).
+          </p>
+          <DataPreviewTable
+            columns={preview.columns}
+            rows={preview.rows}
+            selectedColumns={selectedColumns}
+            clickableColumns={filterableColumns}
+            onColumnClick={onColumnClick}
+          />
+        </>
       )}
     </div>
   )
@@ -60,6 +71,42 @@ function App() {
   )
 
   const handlePreviewChange = useCallback((data) => setPreview(data), [])
+
+  // "table.column" -> valueType, for every column any table allows filtering on.
+  // Lets the preview table know which of its columns are clickable and what
+  // default operator/valueType to attach when one is picked.
+  const filterableColumnMeta = useMemo(() => {
+    const map = new Map()
+    tables.forEach((t) => {
+      t.filterableColumns.forEach((c) => {
+        map.set(`${t.tableName}.${c.column}`, { tableName: t.tableName, column: c.column, valueType: c.valueType })
+      })
+    })
+    return map
+  }, [tables])
+
+  const selectedColumns = useMemo(
+    () => new Set(fieldConditions.map((c) => `${c.tableName}.${c.column}`)),
+    [fieldConditions],
+  )
+
+  const handleColumnClick = useCallback(
+    (qualified) => {
+      if (selectedColumns.has(qualified)) {
+        const meta = filterableColumnMeta.get(qualified)
+        if (!meta) return
+        setFieldConditions((prev) =>
+          prev.filter((c) => !(c.tableName === meta.tableName && c.column === meta.column)),
+        )
+        return
+      }
+      const meta = filterableColumnMeta.get(qualified)
+      if (!meta) return
+      const operator = OPERATORS_BY_VALUE_TYPE[meta.valueType][0]
+      setFieldConditions((prev) => [...prev, { ...meta, operator, value: '' }])
+    },
+    [selectedColumns, filterableColumnMeta],
+  )
 
   return (
     <div className="app">
@@ -99,7 +146,12 @@ function App() {
                   실제로 어떤 값이 있는지 볼 수 있어요.
                 </p>
 
-                <DataPreviewBar preview={preview} />
+                <DataPreviewBar
+                  preview={preview}
+                  filterableColumns={filterableColumnMeta}
+                  selectedColumns={selectedColumns}
+                  onColumnClick={handleColumnClick}
+                />
 
                 <div className="condition-join-row">
                   <FieldConditionStep
