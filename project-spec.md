@@ -396,3 +396,29 @@ WHERE EXISTS (
 - SQL 인젝션 방어를 위한 화이트리스트 컬럼 검증 등 보안 고려
 - 인덱스/실행계획 확인 등 성능 트레이드오프 고민 근거 보유
 - "왜 이 구조여야 했는지" 질문에 실제 사례(잘못된 조인의 예)로 구체적 답변 가능
+
+---
+
+## 11. 배포
+
+포트폴리오용 도메인(`itssophie.dev`) 아래 경로 기반으로 배포. 별도 서브도메인 대신
+`/tablelink` 경로를 써서, 도메인 루트는 포트폴리오 목록 페이지가 차지하고 TableLink는
+그 목록의 항목 중 하나로 들어가는 구조.
+
+- **서버**: Oracle Cloud 무료 티어 인스턴스(RAM 1GB) 한 대를 다른 프로젝트(`issue-pop`,
+  `newstrend-api`)와 공유. 포트폴리오 규모에서는 프로젝트별로 서버를 나누기보다 nginx
+  가상 호스트로 한 서버에 모으는 쪽이 비용/관리 면에서 합리적이라 판단
+- **백엔드**: 로컬에서 빌드한 JAR를 서버로 전송 후 systemd 서비스(`tablelink-backend.service`,
+  포트 8081)로 상시 구동. 메모리 제약 때문에 `-Xmx256m -Xss512k`로 힙을 제한. 서버 자체
+  Maven 빌드는 메모리 위험이 커서 하지 않음 — 로컬 빌드 후 전송하는 방식으로 고정
+- **DB**: 서버에 Docker 대신 네이티브 PostgreSQL 16 설치(메모리 절약). `tablelink` 전용
+  DB/role 생성, 비밀번호는 systemd unit의 `Environment=`로만 주입하고 git에는 커밋하지 않음
+- **프론트엔드**: Vite `base`를 빌드 시에만 `/tablelink/`로 전환하고, `api.js`가
+  `import.meta.env.BASE_URL` 기반으로 `/tablelink/api` 프리픽스를 붙여 요청. 빌드 산출물을
+  로컬에서 만들어 서버의 `/var/www/tablelink`로 전송
+- **nginx**: `itssophie.dev` 서버 블록 하나로 루트(`/var/www/portfolio`, 포트폴리오 홈),
+  `/tablelink/`(정적 SPA, alias + `try_files ... /tablelink/index.html`),
+  `/tablelink/api/`(백엔드 8081로 리버스 프록시, 프리픽스 스트립)를 모두 처리. 기존
+  `api.issue-pop.com` 서버 블록과 같은 nginx 인스턴스에서 `server_name`으로 분기
+- **HTTPS**: DNS A 레코드(`itssophie.dev` → 서버 공인 IP)를 도메인 등록기관에서 연결한 뒤
+  certbot으로 인증서 발급 예정 (DNS 전파 전이라 아직 HTTP만 서빙 중)
