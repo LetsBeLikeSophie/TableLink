@@ -5,7 +5,7 @@ import FieldConditionStep from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 
-const STEPS = ['조건 선택 & 조인', '결과']
+const STEPS = ['조건 선택', '결과']
 
 function PlaceholderStep({ title }) {
   return (
@@ -16,20 +16,17 @@ function PlaceholderStep({ title }) {
   )
 }
 
-function PreviewSidebar({ preview }) {
+function DataPreviewBar({ preview }) {
   return (
-    <aside className="preview-sidebar">
+    <div className="data-preview-bar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
       {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
       {preview?.loading && <div className="empty-box">불러오는 중...</div>}
       {preview?.error && <div className="error-banner">{preview.error}</div>}
       {preview && !preview.loading && !preview.error && preview.columns && (
-        <>
-          {preview.sql && <pre className="sql-preview">{preview.sql}</pre>}
-          <DataPreviewTable columns={preview.columns} rows={preview.rows} />
-        </>
+        <DataPreviewTable columns={preview.columns} rows={preview.rows} />
       )}
-    </aside>
+    </div>
   )
 }
 
@@ -39,7 +36,7 @@ function App() {
   const [tablesLoading, setTablesLoading] = useState(true)
   const [tablesError, setTablesError] = useState(null)
   const [fieldConditions, setFieldConditions] = useState([])
-  const [sidebarPreview, setSidebarPreview] = useState(null)
+  const [preview, setPreview] = useState(null)
 
   const refreshTables = useCallback(async () => {
     setTablesError(null)
@@ -62,7 +59,7 @@ function App() {
     [fieldConditions],
   )
 
-  const handlePreviewChange = useCallback((data) => setSidebarPreview(data), [])
+  const handlePreviewChange = useCallback((data) => setPreview(data), [])
 
   return (
     <div className="app">
@@ -86,16 +83,25 @@ function App() {
 
       {tablesError && <div className="error-banner content-error">{tablesError}</div>}
 
-      <main className="content-grid">
-        <div className="step-body">
-          {tablesLoading ? (
-            <div className="panel">
-              <div className="empty-box tall">불러오는 중...</div>
-            </div>
-          ) : (
-            <>
-              {step === 0 && (
-                <>
+      <main className="content">
+        {tablesLoading ? (
+          <div className="panel">
+            <div className="empty-box tall">불러오는 중...</div>
+          </div>
+        ) : (
+          <>
+            {step === 0 && (
+              <div className="panel">
+                <h2>조건 선택</h2>
+                <p className="hint">
+                  원하는 조건 필드를 검색해서 담으세요 (테이블 소속이 함께 표시됩니다). 필요한
+                  테이블은 관계도에 자동으로 연결됩니다. (i) 아이콘에 마우스를 올리면 그 컬럼에
+                  실제로 어떤 값이 있는지 볼 수 있어요.
+                </p>
+
+                <DataPreviewBar preview={preview} />
+
+                <div className="condition-join-row">
                   <FieldConditionStep
                     tables={tables}
                     conditions={fieldConditions}
@@ -108,14 +114,12 @@ function App() {
                     onPreviewChange={handlePreviewChange}
                     embedded
                   />
-                </>
-              )}
-              {step === 1 && <PlaceholderStep title="결과" />}
-            </>
-          )}
-        </div>
-
-        <PreviewSidebar preview={sidebarPreview} />
+                </div>
+              </div>
+            )}
+            {step === 1 && <PlaceholderStep title="결과" />}
+          </>
+        )}
       </main>
     </div>
   )

@@ -3,6 +3,7 @@ import { ReactFlow, Background, Controls, ReactFlowProvider, useReactFlow, Marke
 import '@xyflow/react/dist/style.css'
 import { buildJoinChain } from './api'
 import { computeConnectingPlan, joinTypeOf } from './joinCandidates'
+import Modal from './Modal'
 
 const JOIN_TYPE_LABEL = {
   STATE_STATE: 'STATE-STATE',
@@ -32,12 +33,7 @@ function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, emb
   )
 
   if (embedded) {
-    return (
-      <div className="join-embedded">
-        <h3>관계도 &amp; 조인 (조건에 맞춰 자동 연결됨)</h3>
-        {body}
-      </div>
-    )
+    return <div className="join-embedded">{body}</div>
   }
 
   return (
@@ -64,6 +60,8 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState(null)
+  const [chainModalOpen, setChainModalOpen] = useState(false)
+  const [copyStatus, setCopyStatus] = useState('')
 
   const tableByName = useMemo(() => {
     const map = {}
@@ -152,6 +150,39 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
     [removeRequiredTable],
   )
 
+  const legacyCopy = (text) => {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    let ok = false
+    try {
+      ok = document.execCommand('copy')
+    } catch {
+      ok = false
+    }
+    document.body.removeChild(textarea)
+    return ok
+  }
+
+  const copySql = () => {
+    if (!preview?.sql) return
+    const showResult = (ok) => {
+      setCopyStatus(ok ? '복사됨' : '복사 실패')
+      setTimeout(() => setCopyStatus(''), 1500)
+    }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(preview.sql)
+        .then(() => showResult(true))
+        .catch(() => showResult(legacyCopy(preview.sql)))
+    } else {
+      showResult(legacyCopy(preview.sql))
+    }
+  }
+
   const toggleLatestOnly = (toTable, defaultValue) => {
     setLatestOnlyOverrides((prev) => ({
       ...prev,
@@ -196,7 +227,6 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
       title: '조인 결과',
       loading: previewLoading,
       error: previewError,
-      sql: preview?.sql ?? null,
       columns: preview?.previewColumns ?? null,
       rows: preview?.previewRows ?? null,
     })
@@ -323,9 +353,19 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
           </div>
         </div>
 
-        <div className="join-preview-panel">
-          <h3>조인 체인</h3>
-          {edges.length === 0 && <div className="empty-box">테이블을 캔버스에 놓아 연결하세요.</div>}
+      </div>
+
+      <button
+        type="button"
+        className="link-button chain-modal-trigger"
+        disabled={edges.length === 0}
+        onClick={() => setChainModalOpen(true)}
+      >
+        조인 체인 &amp; SQL 보기 ({edges.length})
+      </button>
+
+      {chainModalOpen && (
+        <Modal title="조인 체인 & SQL" onClose={() => setChainModalOpen(false)}>
           <ul className="join-edge-list">
             {edges.map((e) => {
               const type = joinTypeOf(tableByName[e.fromTable], tableByName[e.toTable])
@@ -351,8 +391,16 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
               )
             })}
           </ul>
-        </div>
-      </div>
+
+          <div className="modal-sql-header">
+            <h4>SQL</h4>
+            <button type="button" onClick={copySql}>
+              {copyStatus || '복사'}
+            </button>
+          </div>
+          <pre className="sql-preview">{preview?.sql || '(불러오는 중...)'}</pre>
+        </Modal>
+      )}
     </>
   )
 }

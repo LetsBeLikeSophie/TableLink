@@ -119,15 +119,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
   }
 
   return (
-    <div className="panel">
-      <h2>조건 선택</h2>
-      <p className="hint">
-        원하는 조건 필드를 검색해서 담으세요 (테이블 소속이 함께 표시됩니다). 필요한 테이블은
-        아래 관계도에 자동으로 연결됩니다. (i) 아이콘에 마우스를 올리면 그 컬럼에 실제로 어떤
-        값이 있는지 볼 수 있어요.
-      </p>
-
-      <div className="field-cart-layout">
+    <div className="field-cart-column">
         <div className="field-search-panel">
           <input
             type="text"
@@ -237,7 +229,6 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
             })}
           </ul>
         </div>
-      </div>
     </div>
   )
 }
