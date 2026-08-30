@@ -5,20 +5,12 @@ import FieldConditionStep, { OPERATORS_BY_VALUE_TYPE } from './FieldConditionSte
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 import ColumnFilterPopover from './ColumnFilterPopover'
+import ResultsStep from './ResultsStep'
 
 const STEPS = ['조건 선택', '결과']
 
 function fieldKey(tableName, column) {
   return `${tableName}.${column}`
-}
-
-function PlaceholderStep({ title }) {
-  return (
-    <div className="panel">
-      <h2>{title}</h2>
-      <div className="empty-box tall">아직 구현되지 않음</div>
-    </div>
-  )
 }
 
 function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColumn, onColumnClick }) {
@@ -56,6 +48,7 @@ function App() {
   const [tablesError, setTablesError] = useState(null)
   const [fieldConditions, setFieldConditions] = useState([])
   const [preview, setPreview] = useState(null)
+  const [chain, setChain] = useState(null) // { rootTable, edges } from the join graph, for /segments
   const [domains, setDomains] = useState({})
   const [openColumn, setOpenColumn] = useState(null) // { qualified, rect } | null
   const requestedDomainsRef = useRef(new Set())
@@ -82,6 +75,7 @@ function App() {
   )
 
   const handlePreviewChange = useCallback((data) => setPreview(data), [])
+  const handleChainChange = useCallback((data) => setChain(data), [])
 
   // Fetched at most once per column per session — domain data doesn't change
   // during a session, so a cached hit should never trigger another request.
@@ -158,7 +152,10 @@ function App() {
           <button
             key={label}
             className={`step ${i === step ? 'active' : ''}`}
-            onClick={() => setStep(i)}
+            onClick={() => {
+              setStep(i)
+              setOpenColumn(null)
+            }}
           >
             <span className="step-num">{i + 1}</span>
             {label}
@@ -205,12 +202,13 @@ function App() {
                     initialTables={initialJoinTables}
                     conditions={fieldConditions}
                     onPreviewChange={handlePreviewChange}
+                    onChainChange={handleChainChange}
                     embedded
                   />
                 </div>
               </div>
             )}
-            {step === 1 && <PlaceholderStep title="결과" />}
+            {step === 1 && <ResultsStep chain={chain} conditions={fieldConditions} />}
           </>
         )}
       </main>

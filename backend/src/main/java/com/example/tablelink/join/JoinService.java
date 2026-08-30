@@ -44,12 +44,46 @@ public class JoinService {
     private record EdgeKey(String leftColumn, String rightColumn, boolean sharedParent) {
     }
 
+    /** A validated, ordered join chain — tableOrder.get(0) is the root/FROM table. */
+    public record ResolvedJoinChain(List<String> tableOrder, List<JoinEdgeResult> edges) {
+    }
+
     public JoinChainResponse buildChain(JoinChainRequest request) {
+        ResolvedJoinChain chain = resolveChain(request.rootTable(), request.edges());
+        String sql = buildSelectAllSql(chain);
+
+        List<Object> params = new ArrayList<>();
+        String whereClause = buildWhereClause(chain.tableOrder(), request.filters(), params);
+        String previewSql = whereClause.isEmpty() ? sql : sql + "\nWHERE " + whereClause;
+
+        PreviewResult preview;
+        try {
+            preview = previewQueryExecutor.execute(previewSql, params, PREVIEW_ROW_LIMIT);
+        } catch (DataAccessException e) {
+            throw new JoinValidationException("조인 실행 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
+        }
+
+        return new JoinChainResponse(chain.edges(), previewSql, preview.columns(), preview.rows());
+    }
+
+    /**
+     * Validates and resolves a join chain starting from rootTable, following
+     * edgeRequests in order. edgeRequests may be empty (a single, unjoined
+     * root table is a valid — if trivial — chain).
+     */
+    public ResolvedJoinChain resolveChain(String rootTable, List<JoinEdgeRequest> edgeRequests) {
+        if (tableSchemaResolver.resolve(rootTable) == null) {
+            throw new JoinValidationException("존재하지 않는 테이블입니다: " + rootTable);
+        }
         List<JoinEdgeResult> results = new ArrayList<>();
         List<String> tableOrder = new ArrayList<>();
-        tableOrder.add(request.edges().get(0).fromTable());
+        tableOrder.add(rootTable);
 
-        for (JoinEdgeRequest edgeRequest : request.edges()) {
+        if (edgeRequests == null) {
+            return new ResolvedJoinChain(tableOrder, results);
+        }
+
+        for (JoinEdgeRequest edgeRequest : edgeRequests) {
             ResolvedTable left = tableSchemaResolver.resolve(edgeRequest.fromTable());
             if (left == null) {
                 throw new JoinValidationException("존재하지 않는 테이블입니다: " + edgeRequest.fromTable());
@@ -76,23 +110,10 @@ public class JoinService {
             }
         }
 
-        String sql = buildCombinedSql(tableOrder, results);
-
-        List<Object> params = new ArrayList<>();
-        String whereClause = buildWhereClause(tableOrder, request.filters(), params);
-        String previewSql = whereClause.isEmpty() ? sql : sql + "\nWHERE " + whereClause;
-
-        PreviewResult preview;
-        try {
-            preview = previewQueryExecutor.execute(previewSql, params, PREVIEW_ROW_LIMIT);
-        } catch (DataAccessException e) {
-            throw new JoinValidationException("조인 실행 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
-        }
-
-        return new JoinChainResponse(results, previewSql, preview.columns(), preview.rows());
+        return new ResolvedJoinChain(tableOrder, results);
     }
 
-    private String buildWhereClause(List<String> tableOrder, List<FilterConditionDto> filters, List<Object> params) {
+    public String buildWhereClause(List<String> tableOrder, List<FilterConditionDto> filters, List<Object> params) {
         if (filters == null || filters.isEmpty()) {
             return "";
         }
@@ -142,28 +163,30 @@ public class JoinService {
         return Optional.empty();
     }
 
+    /** "FROM root\nJOIN b ON ...\nJOIN c ON ..." — no SELECT list. */
+    public String buildFromJoinClause(ResolvedJoinChain chain) {
+        StringBuilder sql = new StringBuilder("FROM ").append(chain.tableOrder().get(0));
+        for (JoinEdgeResult edge : chain.edges()) {
+            sql.append("\nJOIN ").append(edge.toTable()).append(" ON ").append(edge.onClause());
+        }
+        return sql.toString();
+    }
+
     /**
-     * Qualifies and aliases every column as "table.column" instead of SELECT *,
-     * since joined tables commonly share column names (e.g. every table here
-     * has its own "vehicle_id") which would otherwise silently collide in the
-     * result map.
+     * Qualifies and aliases every column of every joined table as "table.column"
+     * instead of SELECT *, since joined tables commonly share column names
+     * (e.g. every table here has its own "vehicle_id") which would otherwise
+     * silently collide in the result map.
      */
-    private String buildCombinedSql(List<String> tableOrder, List<JoinEdgeResult> edges) {
+    public String buildSelectAllSql(ResolvedJoinChain chain) {
         List<String> selectColumns = new ArrayList<>();
-        for (String tableName : tableOrder) {
+        for (String tableName : chain.tableOrder()) {
             ResolvedTable table = tableSchemaResolver.resolve(tableName);
             for (ColumnInfo column : table.columns()) {
                 String qualified = tableName + "." + column.name();
                 selectColumns.add(qualified + " AS \"" + qualified + "\"");
             }
         }
-
-        StringBuilder sql = new StringBuilder("SELECT ")
-                .append(String.join(", ", selectColumns))
-                .append("\nFROM ").append(tableOrder.get(0));
-        for (JoinEdgeResult edge : edges) {
-            sql.append("\nJOIN ").append(edge.toTable()).append(" ON ").append(edge.onClause());
-        }
-        return sql.toString();
+        return "SELECT " + String.join(", ", selectColumns) + "\n" + buildFromJoinClause(chain);
     }
 }

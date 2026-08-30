@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/tables': 'http://localhost:8080',
       '/joins': 'http://localhost:8080',
+      '/segments': 'http://localhost:8080',
     },
   },
 })

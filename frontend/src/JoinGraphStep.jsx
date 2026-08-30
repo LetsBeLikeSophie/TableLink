@@ -3,6 +3,7 @@ import { ReactFlow, Background, Controls, ReactFlowProvider, useReactFlow, Marke
 import '@xyflow/react/dist/style.css'
 import { buildJoinChain } from './api'
 import { computeConnectingPlan, joinTypeOf } from './joinCandidates'
+import { toActiveFilters } from './conditionUtils'
 import Modal from './Modal'
 
 const JOIN_TYPE_LABEL = {
@@ -15,7 +16,7 @@ function nodeLabel(t) {
   return `${t.tableName}\n${t.type}${t.historySubType ? ' · ' + t.historySubType : ''}`
 }
 
-function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, embedded = false }) {
+function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, onChainChange, embedded = false }) {
   if (!tables || tables.length === 0) {
     return <div className="empty-box tall">불러오는 중...</div>
   }
@@ -27,6 +28,7 @@ function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, emb
         initialTables={initialTables}
         conditions={conditions}
         onPreviewChange={onPreviewChange}
+        onChainChange={onChainChange}
         embedded={embedded}
       />
     </ReactFlowProvider>
@@ -48,9 +50,7 @@ function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, emb
   )
 }
 
-const NO_VALUE_OPERATORS = new Set(['IS_NULL', 'IS_NOT_NULL'])
-
-function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embedded }) {
+function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onChainChange, embedded }) {
   const { screenToFlowPosition } = useReactFlow()
 
   const [requiredTables, setRequiredTables] = useState([])
@@ -190,16 +190,12 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
     }))
   }
 
-  const activeFilters = useMemo(
-    () =>
-      (conditions || [])
-        .filter((c) => NO_VALUE_OPERATORS.has(c.operator) || (c.value !== undefined && c.value !== ''))
-        .map((c) => ({ tableName: c.tableName, column: c.column, operator: c.operator, value: c.value })),
-    [conditions],
-  )
+  const activeFilters = useMemo(() => toActiveFilters(conditions), [conditions])
+
+  const rootTable = plan.tables[0] ?? null
 
   useEffect(() => {
-    if (edges.length === 0) {
+    if (!rootTable) {
       setPreview(null)
       setPreviewError(null)
       return
@@ -208,6 +204,7 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
       setPreviewLoading(true)
       setPreviewError(null)
       buildJoinChain(
+        rootTable,
         edges.map((e) => ({ fromTable: e.fromTable, toTable: e.toTable, latestOnly: e.latestOnly })),
         activeFilters,
       )
@@ -219,7 +216,19 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embed
         .finally(() => setPreviewLoading(false))
     }, 400)
     return () => clearTimeout(timer)
-  }, [edges, activeFilters])
+  }, [rootTable, edges, activeFilters])
+
+  // Hand the resolved chain (not just the preview data) up so the results
+  // step can run the same join+filters through /segments without having to
+  // re-derive it — this graph is the one source of truth for "what's the
+  // chain right now."
+  useEffect(() => {
+    if (!onChainChange) return
+    onChainChange({
+      rootTable,
+      edges: edges.map((e) => ({ fromTable: e.fromTable, toTable: e.toTable, latestOnly: e.latestOnly })),
+    })
+  }, [rootTable, edges, onChainChange])
 
   useEffect(() => {
     if (!onPreviewChange) return

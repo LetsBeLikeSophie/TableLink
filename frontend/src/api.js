@@ -24,15 +24,28 @@ export async function fetchColumnDomain(tableName, column) {
   return res.json()
 }
 
-export async function buildJoinChain(edges, filters = []) {
+export async function buildJoinChain(rootTable, edges, filters = []) {
   const res = await fetch('/joins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ edges, filters }),
+    body: JSON.stringify({ rootTable, edges, filters }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.message || `조인 체인 생성 실패 (HTTP ${res.status})`)
+  }
+  return res.json()
+}
+
+export async function runSegment(rootTable, edges, filters = []) {
+  const res = await fetch('/segments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rootTable, edges, filters }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.message || `세그먼트 조회 실패 (HTTP ${res.status})`)
   }
   return res.json()
 }
