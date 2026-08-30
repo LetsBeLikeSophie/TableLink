@@ -235,30 +235,42 @@ WHERE EXISTS (
 
 ## 5. 화면 플로우 (4단계)
 
+세그먼트를 뽑을 때 실제로는 "이런 조건으로 찾고 싶다"가 먼저 있고 조인은 그 결과물이라, 조인
+설계(관계도&조인)보다 조건 선택을 먼저 하도록 순서를 잡았다. 자유입력(자연어 파싱)은 여전히
+범위 밖(9번)이라, "조건 먼저"는 전체 테이블의 filterableColumns를 검색해서 담는 방식으로 구현—
+장바구니처럼 담은 필드의 소속 테이블을 다음 화면에서 자동으로 조인해준다.
+
 1. **테이블 확인** — DB 스키마 조회 + 컨벤션으로 type/historySubType/foreignKeys 자동 판정된 테이블 목록 표시, filterableColumns만 기본값(PK/FK 제외 전체)에서 사용자가 체크 해제로 조정
 
-2. **관계도 & 조인**
-   - 1단계에서 확인된 테이블을 노드로, FK 관계를 엣지로 그래프 표시 (React Flow)
-   - 노드 드래그 시작 시 FK로 연결 가능한 테이블만 하이라이트, 그 외엔 드롭 비활성
-     (연결 안 된 테이블끼리는 애초에 드롭 시도가 안 되도록 사전 안내 — 실패 후 에러 메시지 방식 대신)
+2. **조건 선택 (필드 장바구니)**
+   - 전체 테이블의 filterableColumns를 `테이블명.컬럼명` 형태로 검색 가능한 리스트로 표시
+     (테이블 소속을 컬럼명과 함께 노출 — 예: `order.order_date`처럼 맥락이 유지되게)
+   - 클릭해서 담으면 operator(컬럼 valueType에 따라 후보 제한: CATEGORY→EQ/NEQ,
+     DATE→WITHIN_LAST_N_DAYS/OLDER_THAN_N_DAYS/GT/LT, NUMBER→부등호, FREE_TEXT→LIKE) + 값 입력
+   - (MVP 단순화) 그룹(OR/AND 2단계)은 1차 구현에서 생략, 전부 AND로 묶임 — 그룹 UI는 후속 작업
+   - (MVP 단순화) CATEGORY 컬럼의 `SELECT DISTINCT` 드롭다운도 후속 작업, 우선 텍스트 입력
+
+3. **관계도 & 조인**
+   - 2단계에서 담긴 필드들의 소속 테이블이 화면 진입과 동시에 캔버스에 자동 배치되고,
+     FK/공유키로 연결 가능한 것끼리는 자동으로 이어짐 (드롭할 때마다 전체 미연결 노드를
+     재확인해서, 다리 역할 테이블이 나중에 추가돼도 기존 고립 노드가 뒤늦게 붙을 수 있음)
+   - 자동으로 못 이은 경우(중간 테이블이 필요한 경우)는 경고 배너로 안내하고, 사용자가
+     직접 중간 테이블을 드래그해서 이어줌 — 그래프 자동경로탐색(9번에서 제외)은 여전히 안 함,
+     "한 홉 자동연결 + 막히면 사용자에게 알림"으로 절충
+   - 테이블 목록에서 캔버스로 드래그해서 수동으로 테이블을 추가/보완하는 것도 가능
    - 조인 방식(STATE-STATE / STATE-HISTORY / HISTORY-HISTORY)은 `JoinStrategyFactory`가
      타입 조합을 보고 자동 결정, 사용자 입력 불필요
    - 예외: STATE-HISTORY 조인은 "최신값만 볼지" 여부가 선택 가능한 지점이라, 엣지에 토글
      하나만 노출 (기본값 ON = 최신값만)
-   - 결과물: 순서 있는 테이블 체인 → `POST /joins`
-
-3. **필터 (세그먼트 조건)**
-   - 후보 컬럼은 2단계 체인에 포함된 테이블의 `filterableColumns`로 한정
-   - 필터 추가 흐름: 테이블 선택 → 컬럼 선택 → operator(컬럼 valueType에 따라 후보 제한:
-     CATEGORY→EQ/NEQ, DATE→WITHIN_LAST_N_DAYS/OLDER_THAN_N_DAYS/GT/LT, NUMBER→부등호,
-     FREE_TEXT→LIKE) → 값 입력
-   - CATEGORY 타입 컬럼은 값 입력란 대신 `GET /tables/{name}/columns/{column}/distinct-values`
-     결과를 드롭다운으로 표시
-   - "그룹 추가"(그룹 간 AND) / "조건 추가"(그룹 내 OR) 버튼으로 FilterGroup/SegmentQuery 구성
-   - (선택) 생성되는 SQL 미리보기 접기/펼치기 — 7번 성능 트레이드오프 어필 포인트와 연결
+   - 결과물: 순서 있는 테이블 체인 → `POST /joins` (생성 SQL + 샘플 결과 5행을 함께 반환)
 
 4. **세그먼트 결과** — `POST /segments` 호출 → 매칭된 루트 테이블(대부분 customer) row 목록 +
    요약 통계(대상 수, 전체 대비 %). 더미데이터 규모(30명)상 페이지네이션 없이 리스트로 충분
+
+**데이터 미리보기**: 위 스텝과 별개로, 화면 우측 상단(스텝 네비게이션 아래)에 고정된 미리보기
+패널을 두고 스텝이 바뀌어도 같은 자리에서 내용만 갱신됨 — 1단계는 선택한 테이블의 샘플 로우,
+3단계는 조인 결과 SQL+샘플 로우. 콘텐츠 길이가 스텝마다 달라서 인라인에 두면 위치가 들쭉날쭉
+해지는 문제가 있어 앱 레벨 고정 레이아웃으로 뺐다.
 
 ---
 
@@ -272,9 +284,12 @@ WHERE EXISTS (
     자동 판정된 테이블 목록 반환 (필터 화면 확인용, 등록 아님)
   - `POST /tables/{name}/filterable-columns` — 자동 판정 결과 중 filterableColumns만
     사용자가 조정한 값으로 저장
-  - `POST /joins` — 조인 체인 등록 (드래그앤드롭으로 이어진 테이블 순서)
+  - `GET /tables/{name}/preview` — 해당 테이블 샘플 5행 (컬럼명은 결과 0건이어도 반환)
+  - `POST /joins` — 조인 체인 검증 + SQL 생성, 그 SQL을 실행한 샘플 결과 5행까지 함께 반환
+    (별도 실행 API 없이 한 번에 미리보기까지 제공)
   - `POST /segments` — 필터(SegmentQuery) 적용 → 세그먼트 결과 조회
-  - `GET /tables/{name}/columns/{column}/distinct-values` — CATEGORY 컬럼 드롭다운용
+  - `GET /tables/{name}/columns/{column}/distinct-values` — CATEGORY 컬럼 드롭다운용 (미구현,
+    현재는 값 입력을 텍스트로 대체)
 
 ---
 
