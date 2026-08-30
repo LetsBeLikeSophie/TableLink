@@ -5,7 +5,7 @@ import FieldConditionStep from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 
-const STEPS = ['조건 선택', '관계도 & 조인', '결과']
+const STEPS = ['조건 선택 & 조인', '결과']
 
 function PlaceholderStep({ title }) {
   return (
@@ -16,31 +16,11 @@ function PlaceholderStep({ title }) {
   )
 }
 
-function PreviewSidebar({ step, preview }) {
-  if (step === 0) {
-    return (
-      <aside className="preview-sidebar">
-        <h3>데이터 미리보기</h3>
-        <div className="empty-box">
-          조건을 담고 다음 단계(관계도 &amp; 조인)로 넘어가면 조인 결과 미리보기가 여기 표시됩니다.
-        </div>
-      </aside>
-    )
-  }
-
-  if (step === 2) {
-    return (
-      <aside className="preview-sidebar">
-        <h3>데이터 미리보기</h3>
-        <div className="empty-box">결과 화면 완성 후 표시됩니다.</div>
-      </aside>
-    )
-  }
-
+function PreviewSidebar({ preview }) {
   return (
     <aside className="preview-sidebar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
-      {!preview && <div className="empty-box">테이블을 연결하면 표시됩니다.</div>}
+      {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
       {preview?.loading && <div className="empty-box">불러오는 중...</div>}
       {preview?.error && <div className="error-banner">{preview.error}</div>}
       {preview && !preview.loading && !preview.error && preview.columns && (
@@ -115,25 +95,26 @@ function App() {
           ) : (
             <>
               {step === 0 && (
-                <FieldConditionStep
-                  tables={tables}
-                  conditions={fieldConditions}
-                  onConditionsChange={setFieldConditions}
-                />
+                <>
+                  <FieldConditionStep
+                    tables={tables}
+                    conditions={fieldConditions}
+                    onConditionsChange={setFieldConditions}
+                  />
+                  <JoinGraphStep
+                    tables={tables}
+                    initialTables={initialJoinTables}
+                    onPreviewChange={handlePreviewChange}
+                    embedded
+                  />
+                </>
               )}
-              {step === 1 && (
-                <JoinGraphStep
-                  tables={tables}
-                  initialTables={initialJoinTables}
-                  onPreviewChange={handlePreviewChange}
-                />
-              )}
-              {step === 2 && <PlaceholderStep title="결과" />}
+              {step === 1 && <PlaceholderStep title="결과" />}
             </>
           )}
         </div>
 
-        <PreviewSidebar step={step} preview={sidebarPreview} />
+        <PreviewSidebar preview={sidebarPreview} />
       </main>
     </div>
   )

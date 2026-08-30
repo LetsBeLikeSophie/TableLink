@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { fetchColumnDomain } from './api'
 
 const OPERATORS_BY_VALUE_TYPE = {
   CATEGORY: ['EQ', 'NEQ', 'IS_NULL', 'IS_NOT_NULL'],
@@ -9,13 +10,55 @@ const OPERATORS_BY_VALUE_TYPE = {
 
 const NO_VALUE_OPERATORS = new Set(['IS_NULL', 'IS_NOT_NULL'])
 const DAY_COUNT_OPERATORS = new Set(['WITHIN_LAST_N_DAYS', 'OLDER_THAN_N_DAYS'])
+// A closed set small enough to comfortably show as a dropdown. The backend caps
+// the query at 30 rows, so hitting that count means it's probably open-ended
+// free text rather than genuinely categorical (see ColumnDomainDto).
+const CLOSED_SET_MAX = 29
 
 function fieldKey(tableName, column) {
   return `${tableName}.${column}`
 }
 
+function DomainHint({ domainState, onHover }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <span
+      className="domain-hint"
+      onMouseEnter={() => {
+        setOpen(true)
+        onHover()
+      }}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span className="domain-hint-icon">i</span>
+      {open && (
+        <span className="domain-hint-popover">
+          {!domainState || domainState.loading ? (
+            '불러오는 중...'
+          ) : domainState.error ? (
+            '값을 불러오지 못했습니다'
+          ) : domainState.data.min !== null && domainState.data.min !== undefined ? (
+            <>범위: {domainState.data.min} ~ {domainState.data.max}</>
+          ) : domainState.data.values && domainState.data.values.length > 0 ? (
+            <>
+              값 ({domainState.data.values.length}
+              {domainState.data.values.length > CLOSED_SET_MAX ? '+' : ''}개):{' '}
+              {domainState.data.values.slice(0, 12).join(', ')}
+              {domainState.data.values.length > 12 ? ' ...' : ''}
+            </>
+          ) : (
+            '값 없음'
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function FieldConditionStep({ tables, conditions, onConditionsChange }) {
   const [query, setQuery] = useState('')
+  const [domains, setDomains] = useState({})
 
   const allFields = useMemo(() => {
     const list = []
@@ -36,10 +79,24 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
   const isSelected = (tableName, column) =>
     conditions.some((c) => c.tableName === tableName && c.column === column)
 
+  const ensureDomain = (tableName, column) => {
+    const key = fieldKey(tableName, column)
+    setDomains((prev) => {
+      if (prev[key]) return prev
+      return { ...prev, [key]: { loading: true } }
+    })
+    // Skip if it was already requested (guard against the state batch above not
+    // having landed yet on rapid re-hovers) — a cheap re-fetch is harmless anyway.
+    fetchColumnDomain(tableName, column)
+      .then((data) => setDomains((prev) => ({ ...prev, [key]: { loading: false, data } })))
+      .catch((e) => setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } })))
+  }
+
   const addField = (field) => {
     if (isSelected(field.tableName, field.column)) return
     const operator = OPERATORS_BY_VALUE_TYPE[field.valueType][0]
     onConditionsChange([...conditions, { ...field, operator, value: '' }])
+    ensureDomain(field.tableName, field.column)
   }
 
   const removeField = (tableName, column) => {
@@ -56,8 +113,9 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
     <div className="panel">
       <h2>조건 선택</h2>
       <p className="hint">
-        원하는 조건 필드를 검색해서 담으세요 (테이블 소속이 함께 표시됩니다). 다음 단계(관계도 &amp; 조인)로
-        넘어가면 필요한 테이블이 자동으로 연결됩니다.
+        원하는 조건 필드를 검색해서 담으세요 (테이블 소속이 함께 표시됩니다). 필요한 테이블은
+        아래 관계도에 자동으로 연결됩니다. (i) 아이콘에 마우스를 올리면 그 컬럼에 실제로 어떤
+        값이 있는지 볼 수 있어요.
       </p>
 
       <div className="field-cart-layout">
@@ -72,19 +130,23 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
           <ul className="field-search-list">
             {filteredFields.map((f) => {
               const selected = isSelected(f.tableName, f.column)
+              const key = fieldKey(f.tableName, f.column)
               return (
-                <li key={fieldKey(f.tableName, f.column)}>
-                  <button
-                    type="button"
-                    className={`field-search-item ${selected ? 'selected' : ''}`}
-                    onClick={() => (selected ? removeField(f.tableName, f.column) : addField(f))}
-                  >
-                    <span className="field-search-item-name">
-                      <span className="muted">{f.tableName}.</span>
-                      {f.column}
-                    </span>
+                <li key={key}>
+                  <div className={`field-search-item ${selected ? 'selected' : ''}`}>
+                    <button
+                      type="button"
+                      className="field-search-item-button"
+                      onClick={() => (selected ? removeField(f.tableName, f.column) : addField(f))}
+                    >
+                      <span className="field-search-item-name">
+                        <span className="muted">{f.tableName}.</span>
+                        {f.column}
+                      </span>
+                    </button>
+                    <DomainHint domainState={domains[key]} onHover={() => ensureDomain(f.tableName, f.column)} />
                     <span className="badge badge-subtype">{f.valueType}</span>
-                  </button>
+                  </div>
                 </li>
               )
             })}
@@ -96,45 +158,71 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
           <h3>담은 조건 ({conditions.length})</h3>
           {conditions.length === 0 && <div className="empty-box">왼쪽에서 필드를 클릭해서 담으세요.</div>}
           <ul className="field-cart-list">
-            {conditions.map((c) => (
-              <li key={fieldKey(c.tableName, c.column)} className="field-cart-row">
-                <div className="field-cart-row-header">
-                  <span className="mono">
-                    <span className="muted">{c.tableName}.</span>
-                    {c.column}
-                  </span>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => removeField(c.tableName, c.column)}
-                  >
-                    제거
-                  </button>
-                </div>
-                <div className="field-cart-row-inputs">
-                  <select
-                    value={c.operator}
-                    onChange={(e) =>
-                      updateCondition(c.tableName, c.column, { operator: e.target.value, value: '' })
-                    }
-                  >
-                    {OPERATORS_BY_VALUE_TYPE[c.valueType].map((op) => (
-                      <option key={op} value={op}>
-                        {op}
-                      </option>
-                    ))}
-                  </select>
-                  {!NO_VALUE_OPERATORS.has(c.operator) && (
-                    <input
-                      type="text"
-                      placeholder={DAY_COUNT_OPERATORS.has(c.operator) ? 'N일' : '값'}
-                      value={c.value}
-                      onChange={(e) => updateCondition(c.tableName, c.column, { value: e.target.value })}
-                    />
-                  )}
-                </div>
-              </li>
-            ))}
+            {conditions.map((c) => {
+              const key = fieldKey(c.tableName, c.column)
+              const domainState = domains[key]
+              const domainValues = domainState?.data?.values
+              const isClosedSet = domainValues && domainValues.length > 0 && domainValues.length <= CLOSED_SET_MAX
+              const showDropdown = isClosedSet && !DAY_COUNT_OPERATORS.has(c.operator)
+              const rangeHint =
+                domainState?.data?.min !== undefined && domainState?.data?.min !== null
+                  ? `${domainState.data.min} ~ ${domainState.data.max}`
+                  : '값'
+
+              return (
+                <li key={key} className="field-cart-row">
+                  <div className="field-cart-row-header">
+                    <span className="mono">
+                      <span className="muted">{c.tableName}.</span>
+                      {c.column}
+                    </span>
+                    <DomainHint domainState={domainState} onHover={() => ensureDomain(c.tableName, c.column)} />
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => removeField(c.tableName, c.column)}
+                    >
+                      제거
+                    </button>
+                  </div>
+                  <div className="field-cart-row-inputs">
+                    <select
+                      value={c.operator}
+                      onChange={(e) =>
+                        updateCondition(c.tableName, c.column, { operator: e.target.value, value: '' })
+                      }
+                    >
+                      {OPERATORS_BY_VALUE_TYPE[c.valueType].map((op) => (
+                        <option key={op} value={op}>
+                          {op}
+                        </option>
+                      ))}
+                    </select>
+                    {!NO_VALUE_OPERATORS.has(c.operator) &&
+                      (showDropdown ? (
+                        <select
+                          value={c.value}
+                          onChange={(e) => updateCondition(c.tableName, c.column, { value: e.target.value })}
+                        >
+                          <option value="">선택</option>
+                          {domainValues.map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder={DAY_COUNT_OPERATORS.has(c.operator) ? 'N일' : rangeHint}
+                          value={c.value}
+                          onChange={(e) => updateCondition(c.tableName, c.column, { value: e.target.value })}
+                        />
+                      ))}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
       </div>

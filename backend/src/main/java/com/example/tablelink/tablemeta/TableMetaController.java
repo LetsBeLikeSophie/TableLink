@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.tablelink.common.query.PreviewResult;
+import com.example.tablelink.tablemeta.dto.ColumnDomainDto;
 import com.example.tablelink.tablemeta.dto.DiscoveredTableDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnsUpdateRequest;
 
@@ -31,6 +32,11 @@ public class TableMetaController {
     @GetMapping("/{tableName}/preview")
     public PreviewResult preview(@PathVariable String tableName) {
         return tableMetaService.previewTable(tableName);
+    }
+
+    @GetMapping("/{tableName}/columns/{columnName}/domain")
+    public ColumnDomainDto columnDomain(@PathVariable String tableName, @PathVariable String columnName) {
+        return tableMetaService.columnDomain(tableName, columnName);
     }
 
     @PostMapping("/{tableName}/filterable-columns")

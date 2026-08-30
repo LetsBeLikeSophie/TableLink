@@ -15,6 +15,15 @@ export async function fetchTablePreview(tableName) {
   return res.json()
 }
 
+export async function fetchColumnDomain(tableName, column) {
+  const res = await fetch(`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(column)}/domain`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.message || `값 조회 실패 (HTTP ${res.status})`)
+  }
+  return res.json()
+}
+
 export async function buildJoinChain(edges) {
   const res = await fetch('/joins', {
     method: 'POST',

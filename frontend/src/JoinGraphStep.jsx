@@ -14,12 +14,22 @@ function nodeLabel(t) {
   return `${t.tableName}\n${t.type}${t.historySubType ? ' · ' + t.historySubType : ''}`
 }
 
-function JoinGraphStep({ tables, initialTables, onPreviewChange }) {
+function JoinGraphStep({ tables, initialTables, onPreviewChange, embedded = false }) {
   if (!tables || tables.length === 0) {
+    return <div className="empty-box tall">불러오는 중...</div>
+  }
+
+  const body = (
+    <ReactFlowProvider>
+      <JoinBuilder tables={tables} initialTables={initialTables} onPreviewChange={onPreviewChange} embedded={embedded} />
+    </ReactFlowProvider>
+  )
+
+  if (embedded) {
     return (
-      <div className="panel">
-        <h2>관계도 &amp; 조인</h2>
-        <div className="empty-box tall">불러오는 중...</div>
+      <div className="join-embedded">
+        <h3>관계도 &amp; 조인 (조건에 맞춰 자동 연결됨)</h3>
+        {body}
       </div>
     )
   }
@@ -31,17 +41,16 @@ function JoinGraphStep({ tables, initialTables, onPreviewChange }) {
         왼쪽 목록에서 테이블을 캔버스로 드래그하면, 연결에 필요한 중간 테이블까지 자동으로 찾아서
         이어줍니다. 캔버스의 노드를 클릭해서 선택한 뒤 Delete/Backspace로 제거할 수 있어요.
       </p>
-      <ReactFlowProvider>
-        <JoinBuilder tables={tables} initialTables={initialTables} onPreviewChange={onPreviewChange} />
-      </ReactFlowProvider>
+      {body}
     </div>
   )
 }
 
-function JoinBuilder({ tables, initialTables, onPreviewChange }) {
+function JoinBuilder({ tables, initialTables, onPreviewChange, embedded }) {
   const { screenToFlowPosition } = useReactFlow()
 
   const [requiredTables, setRequiredTables] = useState([])
+  const [manualAddValue, setManualAddValue] = useState('')
   const [nodePositions, setNodePositions] = useState({})
   const [latestOnlyOverrides, setLatestOnlyOverrides] = useState({})
   const [preview, setPreview] = useState(null)
@@ -219,42 +228,80 @@ function JoinBuilder({ tables, initialTables, onPreviewChange }) {
         </div>
       )}
 
-      <div className="join-builder">
-        <div className="join-source-panel">
-          <h3>테이블</h3>
-          <ul className="table-list">
-            {tables.map((t) => {
-              const placed = plan.tables.includes(t.tableName)
-              return (
-                <li key={t.tableName}>
-                  <div
-                    className={`table-list-item join-source-item ${placed ? 'placed' : ''}`}
-                    draggable={!placed}
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData('application/tablelink-table', t.tableName)
-                      event.dataTransfer.effectAllowed = 'move'
-                    }}
-                  >
-                    <span>{t.tableName}</span>
-                    <span className={`badge ${t.type === 'STATE' ? 'badge-type' : 'badge-subtype'}`}>{t.type}</span>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
+      <div className={`join-builder ${embedded ? 'join-builder-embedded' : ''}`}>
+        {!embedded && (
+          <div className="join-source-panel">
+            <h3>테이블</h3>
+            <ul className="table-list">
+              {tables.map((t) => {
+                const placed = plan.tables.includes(t.tableName)
+                return (
+                  <li key={t.tableName}>
+                    <div
+                      className={`table-list-item join-source-item ${placed ? 'placed' : ''}`}
+                      draggable={!placed}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData('application/tablelink-table', t.tableName)
+                        event.dataTransfer.effectAllowed = 'move'
+                      }}
+                    >
+                      <span>{t.tableName}</span>
+                      <span className={`badge ${t.type === 'STATE' ? 'badge-type' : 'badge-subtype'}`}>{t.type}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
 
-        <div className="join-canvas" onDrop={onDrop} onDragOver={onDragOver}>
-          {plan.tables.length === 0 && <div className="join-canvas-hint">여기로 테이블을 드래그하세요</div>}
-          <ReactFlow
-            nodes={nodes}
-            edges={reactFlowEdges}
-            onNodesChange={onNodesChange}
-            proOptions={{ hideAttribution: true }}
+        <div className="join-canvas-column">
+          {embedded && (
+            <div className="join-manual-add">
+              <select value={manualAddValue} onChange={(e) => setManualAddValue(e.target.value)}>
+                <option value="">+ 테이블 직접 추가</option>
+                {tables
+                  .filter((t) => !plan.tables.includes(t.tableName))
+                  .map((t) => (
+                    <option key={t.tableName} value={t.tableName}>
+                      {t.tableName}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                disabled={!manualAddValue}
+                onClick={() => {
+                  if (manualAddValue) {
+                    addRequiredTable(manualAddValue)
+                    setManualAddValue('')
+                  }
+                }}
+              >
+                추가
+              </button>
+            </div>
+          )}
+          <div
+            className={`join-canvas ${embedded ? 'join-canvas-compact' : ''}`}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
           >
-            <Background />
-            <Controls showInteractive={false} />
-          </ReactFlow>
+            {plan.tables.length === 0 && (
+              <div className="join-canvas-hint">
+                {embedded ? '조건을 담으면 여기 자동으로 표시됩니다' : '여기로 테이블을 드래그하세요'}
+              </div>
+            )}
+            <ReactFlow
+              nodes={nodes}
+              edges={reactFlowEdges}
+              onNodesChange={onNodesChange}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background />
+              <Controls showInteractive={false} />
+            </ReactFlow>
+          </div>
         </div>
 
         <div className="join-preview-panel">

@@ -5,12 +5,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.util.Map;
+
 import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.tablelink.common.query.PreviewQueryExecutor;
 import com.example.tablelink.common.query.PreviewResult;
+import com.example.tablelink.tablemeta.dto.ColumnDomainDto;
 import com.example.tablelink.tablemeta.dto.DiscoveredTableDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnsUpdateRequest;
@@ -31,11 +35,48 @@ public class TableMetaService {
     private static final Set<String> NUMBER_SQL_TYPES = Set.of(
             "bigint", "integer", "smallint", "numeric", "decimal", "double precision", "real");
 
+    private static final int PREVIEW_ROW_LIMIT = 5;
+    // Fetched regardless of the column's inferred valueType; the frontend decides
+    // whether to render a dropdown based on whether the actual distinct count came
+    // in under this cap (closed set) or hit it (open-ended free text).
+    private static final int DOMAIN_VALUE_LIMIT = 30;
+
     private final TableMetaRepository tableMetaRepository;
     private final TableSchemaResolver tableSchemaResolver;
     private final PreviewQueryExecutor previewQueryExecutor;
+    private final JdbcTemplate jdbcTemplate;
 
-    private static final int PREVIEW_ROW_LIMIT = 5;
+    public ColumnDomainDto columnDomain(String tableName, String columnName) {
+        ResolvedTable table = tableSchemaResolver.resolve(tableName);
+        if (table == null) {
+            throw new TableMetaValidationException("존재하지 않는 테이블입니다: " + tableName);
+        }
+        ColumnInfo column = table.columns().stream()
+                .filter(c -> c.name().equals(columnName))
+                .findFirst()
+                .orElseThrow(() -> new TableMetaValidationException(
+                        "테이블 " + tableName + "에 존재하지 않는 컬럼입니다: " + columnName));
+
+        FilterValueType valueType = inferValueType(column.sqlType());
+        try {
+            if (valueType == FilterValueType.NUMBER || valueType == FilterValueType.DATE) {
+                Map<String, Object> row = jdbcTemplate.queryForMap(
+                        "SELECT MIN(" + columnName + ") AS min_v, MAX(" + columnName + ") AS max_v FROM " + tableName);
+                return new ColumnDomainDto(valueType, null, toDisplay(row.get("min_v")), toDisplay(row.get("max_v")));
+            }
+            List<String> values = jdbcTemplate.queryForList(
+                    "SELECT DISTINCT " + columnName + "::text FROM " + tableName
+                            + " WHERE " + columnName + " IS NOT NULL ORDER BY 1 LIMIT " + DOMAIN_VALUE_LIMIT,
+                    String.class);
+            return new ColumnDomainDto(valueType, values, null, null);
+        } catch (DataAccessException e) {
+            throw new TableMetaValidationException("값 조회 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
+        }
+    }
+
+    private String toDisplay(Object value) {
+        return value == null ? null : value.toString();
+    }
 
     public PreviewResult previewTable(String tableName) {
         ResolvedTable table = tableSchemaResolver.resolve(tableName);

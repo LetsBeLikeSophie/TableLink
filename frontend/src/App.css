@@ -376,14 +376,73 @@
   cursor: not-allowed;
 }
 
+.join-canvas-column {
+  flex: 1 1 360px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .join-canvas {
   position: relative;
-  flex: 1 1 480px;
-  min-width: 320px;
+  width: 100%;
   height: 460px;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.join-canvas-compact {
+  height: 280px;
+}
+
+.join-manual-add {
+  display: flex;
+  gap: 8px;
+}
+
+.join-manual-add select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.join-manual-add button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.join-manual-add button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.join-embedded {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.join-embedded h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.join-builder-embedded {
+  align-items: stretch;
 }
 
 .join-canvas-hint {
@@ -620,6 +679,58 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.field-search-item-button {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.domain-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.domain-hint-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  cursor: help;
+}
+
+.domain-hint-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin-top: 4px;
+  width: 260px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
 }
 
 .field-cart-panel {
