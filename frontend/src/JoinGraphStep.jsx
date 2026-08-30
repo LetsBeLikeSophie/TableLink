@@ -14,14 +14,20 @@ function nodeLabel(t) {
   return `${t.tableName}\n${t.type}${t.historySubType ? ' · ' + t.historySubType : ''}`
 }
 
-function JoinGraphStep({ tables, initialTables, onPreviewChange, embedded = false }) {
+function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, embedded = false }) {
   if (!tables || tables.length === 0) {
     return <div className="empty-box tall">불러오는 중...</div>
   }
 
   const body = (
     <ReactFlowProvider>
-      <JoinBuilder tables={tables} initialTables={initialTables} onPreviewChange={onPreviewChange} embedded={embedded} />
+      <JoinBuilder
+        tables={tables}
+        initialTables={initialTables}
+        conditions={conditions}
+        onPreviewChange={onPreviewChange}
+        embedded={embedded}
+      />
     </ReactFlowProvider>
   )
 
@@ -46,7 +52,9 @@ function JoinGraphStep({ tables, initialTables, onPreviewChange, embedded = fals
   )
 }
 
-function JoinBuilder({ tables, initialTables, onPreviewChange, embedded }) {
+const NO_VALUE_OPERATORS = new Set(['IS_NULL', 'IS_NOT_NULL'])
+
+function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, embedded }) {
   const { screenToFlowPosition } = useReactFlow()
 
   const [requiredTables, setRequiredTables] = useState([])
@@ -151,6 +159,14 @@ function JoinBuilder({ tables, initialTables, onPreviewChange, embedded }) {
     }))
   }
 
+  const activeFilters = useMemo(
+    () =>
+      (conditions || [])
+        .filter((c) => NO_VALUE_OPERATORS.has(c.operator) || (c.value !== undefined && c.value !== ''))
+        .map((c) => ({ tableName: c.tableName, column: c.column, operator: c.operator, value: c.value })),
+    [conditions],
+  )
+
   useEffect(() => {
     if (edges.length === 0) {
       setPreview(null)
@@ -160,7 +176,10 @@ function JoinBuilder({ tables, initialTables, onPreviewChange, embedded }) {
     const timer = setTimeout(() => {
       setPreviewLoading(true)
       setPreviewError(null)
-      buildJoinChain(edges.map((e) => ({ fromTable: e.fromTable, toTable: e.toTable, latestOnly: e.latestOnly })))
+      buildJoinChain(
+        edges.map((e) => ({ fromTable: e.fromTable, toTable: e.toTable, latestOnly: e.latestOnly })),
+        activeFilters,
+      )
         .then((res) => setPreview(res))
         .catch((e) => {
           setPreviewError(e.message)
@@ -169,7 +188,7 @@ function JoinBuilder({ tables, initialTables, onPreviewChange, embedded }) {
         .finally(() => setPreviewLoading(false))
     }, 400)
     return () => clearTimeout(timer)
-  }, [edges])
+  }, [edges, activeFilters])
 
   useEffect(() => {
     if (!onPreviewChange) return

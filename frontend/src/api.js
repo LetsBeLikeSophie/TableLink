@@ -24,11 +24,11 @@ export async function fetchColumnDomain(tableName, column) {
   return res.json()
 }
 
-export async function buildJoinChain(edges) {
+export async function buildJoinChain(edges, filters = []) {
   const res = await fetch('/joins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ edges }),
+    body: JSON.stringify({ edges, filters }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

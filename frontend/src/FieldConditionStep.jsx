@@ -88,7 +88,16 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
     // Skip if it was already requested (guard against the state batch above not
     // having landed yet on rapid re-hovers) — a cheap re-fetch is harmless anyway.
     fetchColumnDomain(tableName, column)
-      .then((data) => setDomains((prev) => ({ ...prev, [key]: { loading: false, data } })))
+      .then((data) => {
+        setDomains((prev) => ({ ...prev, [key]: { loading: false, data } }))
+        const isClosedSet = data.values && data.values.length > 0 && data.values.length <= CLOSED_SET_MAX
+        if (isClosedSet) {
+          const existing = conditions.find((c) => c.tableName === tableName && c.column === column)
+          if (existing && existing.operator !== 'EQ' && existing.operator !== 'NEQ') {
+            updateCondition(tableName, column, { operator: 'EQ', value: '' })
+          }
+        }
+      })
       .catch((e) => setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } })))
   }
 
@@ -163,7 +172,10 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
               const domainState = domains[key]
               const domainValues = domainState?.data?.values
               const isClosedSet = domainValues && domainValues.length > 0 && domainValues.length <= CLOSED_SET_MAX
-              const showDropdown = isClosedSet && !DAY_COUNT_OPERATORS.has(c.operator)
+              const showDropdown = isClosedSet
+              // A picked-from-a-list value is either a match or not — LIKE/NULL checks don't
+              // apply once we know the exact closed set of values.
+              const operatorChoices = isClosedSet ? ['EQ', 'NEQ'] : OPERATORS_BY_VALUE_TYPE[c.valueType]
               const rangeHint =
                 domainState?.data?.min !== undefined && domainState?.data?.min !== null
                   ? `${domainState.data.min} ~ ${domainState.data.max}`
@@ -192,7 +204,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
                         updateCondition(c.tableName, c.column, { operator: e.target.value, value: '' })
                       }
                     >
-                      {OPERATORS_BY_VALUE_TYPE[c.valueType].map((op) => (
+                      {operatorChoices.map((op) => (
                         <option key={op} value={op}>
                           {op}
                         </option>

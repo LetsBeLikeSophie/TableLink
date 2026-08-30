@@ -26,25 +26,36 @@ public class PreviewQueryExecutor {
     private final JdbcTemplate jdbcTemplate;
 
     public PreviewResult execute(String sql, int limit) {
-        String limited = sql + " LIMIT " + limit;
-        return jdbcTemplate.query(limited, rs -> {
-            ResultSetMetaData meta = rs.getMetaData();
-            int columnCount = meta.getColumnCount();
-            List<String> columns = new ArrayList<>();
-            for (int i = 1; i <= columnCount; i++) {
-                columns.add(meta.getColumnLabel(i));
-            }
+        return execute(sql, List.of(), limit);
+    }
 
-            List<Map<String, Object>> rows = new ArrayList<>();
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int i = 1; i <= columnCount; i++) {
-                    row.put(meta.getColumnLabel(i), normalize(rs.getObject(i)));
-                }
-                rows.add(row);
-            }
-            return new PreviewResult(columns, rows);
-        });
+    public PreviewResult execute(String sql, List<Object> params, int limit) {
+        String limited = sql + " LIMIT " + limit;
+        return jdbcTemplate.query(
+                limited,
+                ps -> {
+                    for (int i = 0; i < params.size(); i++) {
+                        ps.setObject(i + 1, params.get(i));
+                    }
+                },
+                rs -> {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+                    List<String> columns = new ArrayList<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        columns.add(meta.getColumnLabel(i));
+                    }
+
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(meta.getColumnLabel(i), normalize(rs.getObject(i)));
+                        }
+                        rows.add(row);
+                    }
+                    return new PreviewResult(columns, rows);
+                });
     }
 
     /**

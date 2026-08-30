@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 public record JoinChainRequest(
-        @NotEmpty @Valid List<JoinEdgeRequest> edges
+        @NotEmpty @Valid List<JoinEdgeRequest> edges,
+        @Valid List<FilterConditionDto> filters
 ) {
 }

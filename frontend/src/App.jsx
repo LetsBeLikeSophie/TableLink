@@ -104,6 +104,7 @@ function App() {
                   <JoinGraphStep
                     tables={tables}
                     initialTables={initialJoinTables}
+                    conditions={fieldConditions}
                     onPreviewChange={handlePreviewChange}
                     embedded
                   />

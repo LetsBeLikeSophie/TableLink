@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 
 import com.example.tablelink.common.query.PreviewQueryExecutor;
 import com.example.tablelink.common.query.PreviewResult;
+import com.example.tablelink.filter.FilterCondition;
+import com.example.tablelink.filter.FilterConditionSqlBuilder;
+import com.example.tablelink.filter.FilterValidationException;
+import com.example.tablelink.join.dto.FilterConditionDto;
 import com.example.tablelink.join.dto.JoinChainRequest;
 import com.example.tablelink.join.dto.JoinChainResponse;
 import com.example.tablelink.join.dto.JoinEdgeRequest;
@@ -29,6 +33,7 @@ public class JoinService {
     private final TableSchemaResolver tableSchemaResolver;
     private final JoinStrategyFactory joinStrategyFactory;
     private final PreviewQueryExecutor previewQueryExecutor;
+    private final FilterConditionSqlBuilder filterConditionSqlBuilder;
 
     /**
      * left/right join columns for one edge, and whether the two tables share
@@ -73,14 +78,42 @@ public class JoinService {
 
         String sql = buildCombinedSql(tableOrder, results);
 
+        List<Object> params = new ArrayList<>();
+        String whereClause = buildWhereClause(tableOrder, request.filters(), params);
+        String previewSql = whereClause.isEmpty() ? sql : sql + "\nWHERE " + whereClause;
+
         PreviewResult preview;
         try {
-            preview = previewQueryExecutor.execute(sql, PREVIEW_ROW_LIMIT);
+            preview = previewQueryExecutor.execute(previewSql, params, PREVIEW_ROW_LIMIT);
         } catch (DataAccessException e) {
             throw new JoinValidationException("조인 실행 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
         }
 
-        return new JoinChainResponse(results, sql, preview.columns(), preview.rows());
+        return new JoinChainResponse(results, previewSql, preview.columns(), preview.rows());
+    }
+
+    private String buildWhereClause(List<String> tableOrder, List<FilterConditionDto> filters, List<Object> params) {
+        if (filters == null || filters.isEmpty()) {
+            return "";
+        }
+        List<String> fragments = new ArrayList<>();
+        for (FilterConditionDto filter : filters) {
+            if (!tableOrder.contains(filter.tableName())) {
+                throw new FilterValidationException(
+                        "조인에 포함되지 않은 테이블은 필터할 수 없습니다: " + filter.tableName());
+            }
+            ResolvedTable table = tableSchemaResolver.resolve(filter.tableName());
+            boolean validColumn = table.columns().stream().anyMatch(c -> c.name().equals(filter.column()));
+            if (!validColumn) {
+                throw new FilterValidationException(
+                        "테이블 " + filter.tableName() + "에 존재하지 않는 컬럼입니다: " + filter.column());
+            }
+            FilterConditionSqlBuilder.Fragment fragment = filterConditionSqlBuilder.build(
+                    new FilterCondition(filter.tableName(), filter.column(), filter.operator(), filter.value()));
+            fragments.add(fragment.sql());
+            params.addAll(fragment.params());
+        }
+        return String.join(" AND ", fragments);
     }
 
     private Optional<EdgeKey> resolveEdgeKey(ResolvedTable left, ResolvedTable right) {
