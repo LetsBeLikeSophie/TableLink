@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ReactFlow, Background, Controls, ReactFlowProvider, useReactFlow, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { fetchDiscoveredTables, buildJoinChain } from './api'
+import { buildJoinChain } from './api'
 import { isConnectable, joinTypeOf } from './joinCandidates'
-import DataPreviewTable from './DataPreviewTable'
 
 const JOIN_TYPE_LABEL = {
   STATE_STATE: 'STATE-STATE',
@@ -15,19 +14,8 @@ function nodeLabel(t) {
   return `${t.tableName}\n${t.type}${t.historySubType ? ' · ' + t.historySubType : ''}`
 }
 
-function JoinGraphStep() {
-  const [tables, setTables] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    fetchDiscoveredTables()
-      .then(setTables)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) {
+function JoinGraphStep({ tables, initialTables, onPreviewChange }) {
+  if (!tables || tables.length === 0) {
     return (
       <div className="panel">
         <h2>관계도 &amp; 조인</h2>
@@ -43,15 +31,14 @@ function JoinGraphStep() {
         왼쪽 목록에서 테이블을 캔버스로 드래그하면, 이미 놓인 테이블 중 연결 가능한 것에 자동으로 이어집니다.
         캔버스의 노드를 클릭해서 선택한 뒤 Delete/Backspace로 제거할 수 있어요.
       </p>
-      {error && <div className="error-banner">{error}</div>}
       <ReactFlowProvider>
-        <JoinBuilder tables={tables} />
+        <JoinBuilder tables={tables} initialTables={initialTables} onPreviewChange={onPreviewChange} />
       </ReactFlowProvider>
     </div>
   )
 }
 
-function JoinBuilder({ tables }) {
+function JoinBuilder({ tables, initialTables, onPreviewChange }) {
   const { screenToFlowPosition } = useReactFlow()
 
   const [placedTables, setPlacedTables] = useState([])
@@ -83,18 +70,42 @@ function JoinBuilder({ tables }) {
     [tableByName],
   )
 
-  const placeTable = useCallback(
-    (tableName, position) => {
-      setPlacedTables((prev) => {
-        if (prev.includes(tableName)) return prev
-        const parent = prev.find((existing) => isConnectable(tableByName[existing], tableByName[tableName]))
-        if (parent) addEdge(parent, tableName)
-        return [...prev, tableName]
-      })
-      setNodePositions((prev) => ({ ...prev, [tableName]: position }))
-    },
-    [tableByName, addEdge],
-  )
+  const placeTable = useCallback((tableName, position) => {
+    setPlacedTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
+    setNodePositions((prev) => ({ ...prev, [tableName]: position }))
+  }, [])
+
+  // Auto-place tables handed in from the field/condition step (once per new table).
+  useEffect(() => {
+    if (!initialTables || initialTables.length === 0) return
+    initialTables.forEach((tableName, i) => {
+      if (!tableByName[tableName]) return
+      setPlacedTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
+      setNodePositions((prev) =>
+        prev[tableName] ? prev : { ...prev, [tableName]: { x: (i % 4) * 220, y: Math.floor(i / 4) * 160 } },
+      )
+    })
+  }, [initialTables, tableByName])
+
+  // Reconciliation pass: whenever the placed/connected set changes, try to
+  // connect any still-unconnected table to whatever is now reachable. This
+  // catches cases a single "connect the new node" pass would miss — e.g.
+  // customer and service_history are both placed but only linkable via
+  // vehicle; once vehicle connects to one of them, this re-check lets the
+  // other attach too, instead of only ever checking the table just dropped.
+  useEffect(() => {
+    const root = placedTables[0]
+    if (!root) return
+    const reachable = new Set([root, ...edges.map((e) => e.toTable)])
+    for (const t of placedTables) {
+      if (reachable.has(t)) continue
+      const parent = placedTables.find((p) => reachable.has(p) && isConnectable(tableByName[p], tableByName[t]))
+      if (parent) {
+        addEdge(parent, t)
+        break
+      }
+    }
+  }, [placedTables, edges, tableByName, addEdge])
 
   const removeTable = useCallback((tableName) => {
     setPlacedTables((prev) => prev.filter((t) => t !== tableName))
@@ -182,6 +193,11 @@ function JoinBuilder({ tables }) {
     return () => clearTimeout(timer)
   }, [edges])
 
+  useEffect(() => {
+    if (!onPreviewChange) return
+    onPreviewChange({ title: '조인 결과', loading: previewLoading, error: previewError, sql: preview?.sql ?? null, columns: preview?.previewColumns ?? null, rows: preview?.previewRows ?? null })
+  }, [preview, previewLoading, previewError, onPreviewChange])
+
   const nodes = useMemo(
     () =>
       placedTables.map((t) => {
@@ -207,6 +223,11 @@ function JoinBuilder({ tables }) {
         }
       }),
     [placedTables, tableByName, nodePositions, connectedSet, validTargetIds, connectingFrom],
+  )
+
+  const unconnectedCount = useMemo(
+    () => placedTables.filter((t, i) => i > 0 && !connectedSet.has(t)).length,
+    [placedTables, connectedSet],
   )
 
   const hasEdgeBetween = useCallback(
@@ -251,86 +272,82 @@ function JoinBuilder({ tables }) {
   )
 
   return (
-    <div className="join-builder">
-      <div className="join-source-panel">
-        <h3>테이블</h3>
-        <ul className="table-list">
-          {tables.map((t) => {
-            const placed = placedTables.includes(t.tableName)
-            return (
-              <li key={t.tableName}>
-                <div
-                  className={`table-list-item join-source-item ${placed ? 'placed' : ''}`}
-                  draggable={!placed}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('application/tablelink-table', t.tableName)
-                    event.dataTransfer.effectAllowed = 'move'
-                  }}
-                >
-                  <span>{t.tableName}</span>
-                  <span className={`badge ${t.type === 'STATE' ? 'badge-type' : 'badge-subtype'}`}>{t.type}</span>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      </div>
+    <>
+      {unconnectedCount > 0 && (
+        <div className="warning-banner">
+          연결되지 않은 테이블이 {unconnectedCount}개 있어요. 직접 이어지는 키가 없는 것 같아요 — 중간 테이블을
+          하나 더 드래그해서 이어주세요.
+        </div>
+      )}
 
-      <div className="join-canvas" onDrop={onDrop} onDragOver={onDragOver}>
-        {placedTables.length === 0 && <div className="join-canvas-hint">여기로 테이블을 드래그하세요</div>}
-        <ReactFlow
-          nodes={nodes}
-          edges={[...suggestedEdges, ...chainReactFlowEdges]}
-          onNodesChange={onNodesChange}
-          onConnect={onConnect}
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <Controls showInteractive={false} />
-        </ReactFlow>
-      </div>
+      <div className="join-builder">
+        <div className="join-source-panel">
+          <h3>테이블</h3>
+          <ul className="table-list">
+            {tables.map((t) => {
+              const placed = placedTables.includes(t.tableName)
+              return (
+                <li key={t.tableName}>
+                  <div
+                    className={`table-list-item join-source-item ${placed ? 'placed' : ''}`}
+                    draggable={!placed}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData('application/tablelink-table', t.tableName)
+                      event.dataTransfer.effectAllowed = 'move'
+                    }}
+                  >
+                    <span>{t.tableName}</span>
+                    <span className={`badge ${t.type === 'STATE' ? 'badge-type' : 'badge-subtype'}`}>{t.type}</span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
 
-      <div className="join-preview-panel">
-        <h3>조인 체인</h3>
-        {edges.length === 0 && <div className="empty-box">테이블을 캔버스에 놓아 연결하세요.</div>}
-        <ul className="join-edge-list">
-          {edges.map((e) => {
-            const type = joinTypeOf(tableByName[e.fromTable], tableByName[e.toTable])
-            return (
-              <li key={e.toTable} className="join-edge-row">
-                <div className="join-edge-main">
-                  <span className="mono">{e.fromTable}</span>
-                  <span> → </span>
-                  <span className="mono">{e.toTable}</span>
-                  <span className="badge badge-type">{JOIN_TYPE_LABEL[type]}</span>
-                </div>
-                {type === 'STATE_HISTORY' && (
-                  <label className="latest-only-toggle">
-                    <input type="checkbox" checked={e.latestOnly} onChange={() => toggleLatestOnly(e.toTable)} />
-                    최신값만
-                  </label>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+        <div className="join-canvas" onDrop={onDrop} onDragOver={onDragOver}>
+          {placedTables.length === 0 && <div className="join-canvas-hint">여기로 테이블을 드래그하세요</div>}
+          <ReactFlow
+            nodes={nodes}
+            edges={[...suggestedEdges, ...chainReactFlowEdges]}
+            onNodesChange={onNodesChange}
+            onConnect={onConnect}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </div>
 
-        <h3>미리보기</h3>
-        {previewLoading && <div className="empty-box">SQL 생성 중...</div>}
-        {previewError && <div className="error-banner">{previewError}</div>}
-        {preview && (
-          <>
-            <pre className="sql-preview">{preview.sql}</pre>
-            <DataPreviewTable columns={preview.previewColumns} rows={preview.previewRows} />
-          </>
-        )}
-        {!preview && !previewLoading && !previewError && edges.length === 0 && (
-          <div className="empty-box">연결이 생기면 자동으로 표시됩니다.</div>
-        )}
+        <div className="join-preview-panel">
+          <h3>조인 체인</h3>
+          {edges.length === 0 && <div className="empty-box">테이블을 캔버스에 놓아 연결하세요.</div>}
+          <ul className="join-edge-list">
+            {edges.map((e) => {
+              const type = joinTypeOf(tableByName[e.fromTable], tableByName[e.toTable])
+              return (
+                <li key={e.toTable} className="join-edge-row">
+                  <div className="join-edge-main">
+                    <span className="mono">{e.fromTable}</span>
+                    <span> → </span>
+                    <span className="mono">{e.toTable}</span>
+                    <span className="badge badge-type">{JOIN_TYPE_LABEL[type]}</span>
+                  </div>
+                  {type === 'STATE_HISTORY' && (
+                    <label className="latest-only-toggle">
+                      <input type="checkbox" checked={e.latestOnly} onChange={() => toggleLatestOnly(e.toTable)} />
+                      최신값만
+                    </label>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
