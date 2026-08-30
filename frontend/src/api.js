@@ -6,6 +6,15 @@ export async function fetchDiscoveredTables() {
   return res.json()
 }
 
+export async function fetchTablePreview(tableName) {
+  const res = await fetch(`/tables/${encodeURIComponent(tableName)}/preview`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.message || `미리보기 조회 실패 (HTTP ${res.status})`)
+  }
+  return res.json()
+}
+
 export async function buildJoinChain(edges) {
   const res = await fetch('/joins', {
     method: 'POST',

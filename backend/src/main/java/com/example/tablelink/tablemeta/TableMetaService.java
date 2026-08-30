@@ -5,9 +5,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.tablelink.common.query.PreviewQueryExecutor;
+import com.example.tablelink.common.query.PreviewResult;
 import com.example.tablelink.tablemeta.dto.DiscoveredTableDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnsUpdateRequest;
@@ -30,6 +33,21 @@ public class TableMetaService {
 
     private final TableMetaRepository tableMetaRepository;
     private final TableSchemaResolver tableSchemaResolver;
+    private final PreviewQueryExecutor previewQueryExecutor;
+
+    private static final int PREVIEW_ROW_LIMIT = 5;
+
+    public PreviewResult previewTable(String tableName) {
+        ResolvedTable table = tableSchemaResolver.resolve(tableName);
+        if (table == null) {
+            throw new TableMetaValidationException("존재하지 않는 테이블입니다: " + tableName);
+        }
+        try {
+            return previewQueryExecutor.execute("SELECT * FROM " + table.tableName(), PREVIEW_ROW_LIMIT);
+        } catch (DataAccessException e) {
+            throw new TableMetaValidationException("미리보기 조회 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
+        }
+    }
 
     public List<DiscoveredTableDto> discoverTables() {
         return tableSchemaResolver.findTableNames().stream()

@@ -184,6 +184,17 @@
   text-align: left;
 }
 
+.table-list-item > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.table-list-item .badge {
+  flex-shrink: 0;
+}
+
 .table-list-item:hover {
   border-color: var(--border);
 }
@@ -284,20 +295,56 @@
   font-size: 13px;
 }
 
-.join-layout {
+.join-builder {
   display: flex;
   gap: 24px;
   align-items: flex-start;
   flex-wrap: wrap;
 }
 
+.join-source-panel {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.join-source-panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.join-source-item {
+  cursor: grab;
+}
+
+.join-source-item.placed {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .join-canvas {
+  position: relative;
   flex: 1 1 480px;
   min-width: 320px;
   height: 460px;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.join-canvas-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  opacity: 0.5;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .join-canvas .react-flow__node {
@@ -323,15 +370,19 @@
   opacity: 0.35;
 }
 
-.join-side-panel {
-  width: 320px;
+.join-node-unconnected {
+  border-style: dashed !important;
+}
+
+.join-preview-panel {
+  width: 300px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.join-side-panel h3 {
+.join-preview-panel h3 {
   margin: 0;
   font-size: 15px;
 }
@@ -394,4 +445,58 @@
   white-space: pre-wrap;
   overflow-x: auto;
   margin: 0;
+}
+
+.data-preview-panel {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.data-preview-panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.data-preview-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 320px;
+}
+
+.data-preview-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.data-preview-table th,
+.data-preview-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.data-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.data-preview-table td {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.data-preview-empty {
+  text-align: center;
+  color: var(--text);
+  opacity: 0.6;
+  padding: 16px;
 }

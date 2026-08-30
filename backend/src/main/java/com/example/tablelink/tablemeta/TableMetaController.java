@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.tablelink.common.query.PreviewResult;
 import com.example.tablelink.tablemeta.dto.DiscoveredTableDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnsUpdateRequest;
 
@@ -25,6 +26,11 @@ public class TableMetaController {
     @GetMapping("/discover")
     public List<DiscoveredTableDto> discover() {
         return tableMetaService.discoverTables();
+    }
+
+    @GetMapping("/{tableName}/preview")
+    public PreviewResult preview(@PathVariable String tableName) {
+        return tableMetaService.previewTable(tableName);
     }
 
     @PostMapping("/{tableName}/filterable-columns")

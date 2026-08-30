@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { fetchDiscoveredTables, saveFilterableColumns } from './api'
+import { fetchDiscoveredTables, fetchTablePreview, saveFilterableColumns } from './api'
 import JoinGraphStep from './JoinGraphStep'
+import DataPreviewTable from './DataPreviewTable'
 
 const STEPS = ['테이블 확인', '관계도 & 조인', '필터 (세그먼트)', '결과']
 
@@ -12,6 +13,9 @@ function TableConfirmStep() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState(null)
 
   const loadTables = async (keepSelection) => {
     setLoading(true)
@@ -43,6 +47,16 @@ function TableConfirmStep() {
       initial[c.column] = selected.filterableColumns.some((fc) => fc.column === c.column)
     })
     setChecked(initial)
+  }, [selected])
+
+  useEffect(() => {
+    if (!selected) return
+    setPreviewLoading(true)
+    setPreviewError(null)
+    fetchTablePreview(selected.tableName)
+      .then(setPreview)
+      .catch((e) => setPreviewError(e.message))
+      .finally(() => setPreviewLoading(false))
   }, [selected])
 
   const toggleColumn = (column) => {
@@ -144,6 +158,15 @@ function TableConfirmStep() {
             </button>
           </div>
         )}
+
+        <div className="data-preview-panel">
+          <h3>데이터 미리보기</h3>
+          {previewLoading && <div className="empty-box">불러오는 중...</div>}
+          {previewError && <div className="error-banner">{previewError}</div>}
+          {preview && !previewLoading && (
+            <DataPreviewTable columns={preview.columns} rows={preview.rows} />
+          )}
+        </div>
       </div>
     </div>
   )

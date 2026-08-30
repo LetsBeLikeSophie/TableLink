@@ -4,12 +4,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
+import com.example.tablelink.common.query.PreviewQueryExecutor;
+import com.example.tablelink.common.query.PreviewResult;
 import com.example.tablelink.join.dto.JoinChainRequest;
 import com.example.tablelink.join.dto.JoinChainResponse;
 import com.example.tablelink.join.dto.JoinEdgeRequest;
 import com.example.tablelink.join.dto.JoinEdgeResult;
+import com.example.tablelink.tablemeta.schema.ColumnInfo;
 import com.example.tablelink.tablemeta.schema.ForeignKeyInfo;
 import com.example.tablelink.tablemeta.schema.ResolvedTable;
 import com.example.tablelink.tablemeta.schema.TableSchemaResolver;
@@ -20,8 +24,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class JoinService {
 
+    private static final int PREVIEW_ROW_LIMIT = 5;
+
     private final TableSchemaResolver tableSchemaResolver;
     private final JoinStrategyFactory joinStrategyFactory;
+    private final PreviewQueryExecutor previewQueryExecutor;
 
     /**
      * left/right join columns for one edge, and whether the two tables share
@@ -34,6 +41,8 @@ public class JoinService {
 
     public JoinChainResponse buildChain(JoinChainRequest request) {
         List<JoinEdgeResult> results = new ArrayList<>();
+        List<String> tableOrder = new ArrayList<>();
+        tableOrder.add(request.edges().get(0).fromTable());
 
         for (JoinEdgeRequest edgeRequest : request.edges()) {
             ResolvedTable left = tableSchemaResolver.resolve(edgeRequest.fromTable());
@@ -57,10 +66,21 @@ public class JoinService {
 
             results.add(new JoinEdgeResult(edgeRequest.fromTable(), edgeRequest.toTable(), joinType, latestOnly,
                     onClause));
+            if (!tableOrder.contains(edgeRequest.toTable())) {
+                tableOrder.add(edgeRequest.toTable());
+            }
         }
 
-        String sql = buildCombinedSql(request.edges().get(0).fromTable(), results);
-        return new JoinChainResponse(results, sql);
+        String sql = buildCombinedSql(tableOrder, results);
+
+        PreviewResult preview;
+        try {
+            preview = previewQueryExecutor.execute(sql, PREVIEW_ROW_LIMIT);
+        } catch (DataAccessException e) {
+            throw new JoinValidationException("조인 실행 중 오류가 발생했습니다: " + e.getMostSpecificCause().getMessage());
+        }
+
+        return new JoinChainResponse(results, sql, preview.columns(), preview.rows());
     }
 
     private Optional<EdgeKey> resolveEdgeKey(ResolvedTable left, ResolvedTable right) {
@@ -89,8 +109,25 @@ public class JoinService {
         return Optional.empty();
     }
 
-    private String buildCombinedSql(String rootTable, List<JoinEdgeResult> edges) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(rootTable);
+    /**
+     * Qualifies and aliases every column as "table.column" instead of SELECT *,
+     * since joined tables commonly share column names (e.g. every table here
+     * has its own "vehicle_id") which would otherwise silently collide in the
+     * result map.
+     */
+    private String buildCombinedSql(List<String> tableOrder, List<JoinEdgeResult> edges) {
+        List<String> selectColumns = new ArrayList<>();
+        for (String tableName : tableOrder) {
+            ResolvedTable table = tableSchemaResolver.resolve(tableName);
+            for (ColumnInfo column : table.columns()) {
+                String qualified = tableName + "." + column.name();
+                selectColumns.add(qualified + " AS \"" + qualified + "\"");
+            }
+        }
+
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(String.join(", ", selectColumns))
+                .append("\nFROM ").append(tableOrder.get(0));
         for (JoinEdgeResult edge : edges) {
             sql.append("\nJOIN ").append(edge.toTable()).append(" ON ").append(edge.onClause());
         }
