@@ -5,7 +5,7 @@ function formatCell(value) {
   return String(value)
 }
 
-function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, clickableColumns }) {
+function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, clickableColumns, openColumn }) {
   if (!columns || columns.length === 0) {
     return <div className="empty-box">컬럼 정보가 없습니다.</div>
   }
@@ -18,14 +18,15 @@ function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, click
             {columns.map((c) => {
               const clickable = clickableColumns?.has(c)
               const selected = selectedColumns?.has(c)
+              const open = openColumn === c
               return (
-                <th key={c}>
+                <th key={c} className={open ? 'data-preview-th-open' : ''}>
                   {clickable ? (
                     <button
                       type="button"
                       className={`data-preview-th-button ${selected ? 'selected' : ''}`}
-                      title="클릭해서 필터 조건에 추가/제거"
-                      onClick={() => onColumnClick(c)}
+                      title="클릭해서 필터 조건 설정"
+                      onClick={(e) => onColumnClick(c, e.currentTarget.getBoundingClientRect())}
                     >
                       <span className="data-preview-filter-icon">▾</span>
                       {c}

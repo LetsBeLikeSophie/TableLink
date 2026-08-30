@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import { fetchDiscoveredTables } from './api'
+import { fetchDiscoveredTables, fetchColumnDomain } from './api'
 import FieldConditionStep, { OPERATORS_BY_VALUE_TYPE } from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
+import ColumnFilterPopover from './ColumnFilterPopover'
 
 const STEPS = ['조건 선택', '결과']
+
+function fieldKey(tableName, column) {
+  return `${tableName}.${column}`
+}
 
 function PlaceholderStep({ title }) {
   return (
@@ -16,27 +21,30 @@ function PlaceholderStep({ title }) {
   )
 }
 
-function DataPreviewBar({ preview, filterableColumns, selectedColumns, onColumnClick }) {
+function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColumn, onColumnClick }) {
   return (
     <div className="data-preview-bar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
-      {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
-      {preview?.loading && <div className="empty-box">불러오는 중...</div>}
-      {preview?.error && <div className="error-banner">{preview.error}</div>}
-      {preview && !preview.loading && !preview.error && preview.columns && (
-        <>
-          <p className="data-preview-hint">
-            컬럼 이름을 클릭하면 필터 조건으로 담기거나 뺄 수 있어요 (필터 가능한 컬럼만).
-          </p>
-          <DataPreviewTable
-            columns={preview.columns}
-            rows={preview.rows}
-            selectedColumns={selectedColumns}
-            clickableColumns={filterableColumns}
-            onColumnClick={onColumnClick}
-          />
-        </>
-      )}
+      <div className="data-preview-bar-body">
+        {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
+        {preview?.loading && <div className="empty-box">불러오는 중...</div>}
+        {preview?.error && <div className="error-banner">{preview.error}</div>}
+        {preview && !preview.loading && !preview.error && preview.columns && (
+          <>
+            <p className="data-preview-hint">
+              컬럼 이름을 클릭하면 그 자리에서 필터 조건을 설정할 수 있어요 (필터 가능한 컬럼만).
+            </p>
+            <DataPreviewTable
+              columns={preview.columns}
+              rows={preview.rows}
+              selectedColumns={selectedColumns}
+              clickableColumns={filterableColumns}
+              openColumn={openColumn}
+              onColumnClick={onColumnClick}
+            />
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -48,6 +56,9 @@ function App() {
   const [tablesError, setTablesError] = useState(null)
   const [fieldConditions, setFieldConditions] = useState([])
   const [preview, setPreview] = useState(null)
+  const [domains, setDomains] = useState({})
+  const [openColumn, setOpenColumn] = useState(null) // { qualified, rect } | null
+  const requestedDomainsRef = useRef(new Set())
 
   const refreshTables = useCallback(async () => {
     setTablesError(null)
@@ -72,6 +83,21 @@ function App() {
 
   const handlePreviewChange = useCallback((data) => setPreview(data), [])
 
+  // Fetched at most once per column per session — domain data doesn't change
+  // during a session, so a cached hit should never trigger another request.
+  const ensureDomain = useCallback((tableName, column) => {
+    const key = fieldKey(tableName, column)
+    if (requestedDomainsRef.current.has(key)) return
+    requestedDomainsRef.current.add(key)
+    setDomains((prev) => ({ ...prev, [key]: { loading: true } }))
+    fetchColumnDomain(tableName, column)
+      .then((data) => setDomains((prev) => ({ ...prev, [key]: { loading: false, data } })))
+      .catch((e) => {
+        requestedDomainsRef.current.delete(key)
+        setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } }))
+      })
+  }, [])
+
   // "table.column" -> valueType, for every column any table allows filtering on.
   // Lets the preview table know which of its columns are clickable and what
   // default operator/valueType to attach when one is picked.
@@ -79,34 +105,46 @@ function App() {
     const map = new Map()
     tables.forEach((t) => {
       t.filterableColumns.forEach((c) => {
-        map.set(`${t.tableName}.${c.column}`, { tableName: t.tableName, column: c.column, valueType: c.valueType })
+        map.set(fieldKey(t.tableName, c.column), { tableName: t.tableName, column: c.column, valueType: c.valueType })
       })
     })
     return map
   }, [tables])
 
   const selectedColumns = useMemo(
-    () => new Set(fieldConditions.map((c) => `${c.tableName}.${c.column}`)),
+    () => new Set(fieldConditions.map((c) => fieldKey(c.tableName, c.column))),
     [fieldConditions],
   )
 
+  const updateCondition = useCallback((tableName, column, patch) => {
+    setFieldConditions((prev) =>
+      prev.map((c) => (c.tableName === tableName && c.column === column ? { ...c, ...patch } : c)),
+    )
+  }, [])
+
+  const removeCondition = useCallback((tableName, column) => {
+    setFieldConditions((prev) => prev.filter((c) => !(c.tableName === tableName && c.column === column)))
+  }, [])
+
   const handleColumnClick = useCallback(
-    (qualified) => {
-      if (selectedColumns.has(qualified)) {
-        const meta = filterableColumnMeta.get(qualified)
-        if (!meta) return
-        setFieldConditions((prev) =>
-          prev.filter((c) => !(c.tableName === meta.tableName && c.column === meta.column)),
-        )
+    (qualified, rect) => {
+      if (openColumn?.qualified === qualified) {
+        setOpenColumn(null)
         return
       }
       const meta = filterableColumnMeta.get(qualified)
       if (!meta) return
-      const operator = OPERATORS_BY_VALUE_TYPE[meta.valueType][0]
-      setFieldConditions((prev) => [...prev, { ...meta, operator, value: '' }])
+      if (!selectedColumns.has(qualified)) {
+        const operator = OPERATORS_BY_VALUE_TYPE[meta.valueType][0]
+        setFieldConditions((prev) => [...prev, { ...meta, operator, value: '' }])
+      }
+      ensureDomain(meta.tableName, meta.column)
+      setOpenColumn({ qualified, rect })
     },
-    [selectedColumns, filterableColumnMeta],
+    [openColumn, filterableColumnMeta, selectedColumns, ensureDomain],
   )
+
+  const openCondition = openColumn ? fieldConditions.find((c) => fieldKey(c.tableName, c.column) === openColumn.qualified) : null
 
   return (
     <div className="app">
@@ -150,6 +188,7 @@ function App() {
                   preview={preview}
                   filterableColumns={filterableColumnMeta}
                   selectedColumns={selectedColumns}
+                  openColumn={openColumn?.qualified}
                   onColumnClick={handleColumnClick}
                 />
 
@@ -158,6 +197,8 @@ function App() {
                     tables={tables}
                     conditions={fieldConditions}
                     onConditionsChange={setFieldConditions}
+                    domains={domains}
+                    ensureDomain={ensureDomain}
                   />
                   <JoinGraphStep
                     tables={tables}
@@ -173,6 +214,20 @@ function App() {
           </>
         )}
       </main>
+
+      {openColumn && openCondition && (
+        <ColumnFilterPopover
+          anchorRect={openColumn.rect}
+          condition={openCondition}
+          domainState={domains[openColumn.qualified]}
+          onChange={(patch) => updateCondition(openCondition.tableName, openCondition.column, patch)}
+          onRemove={() => {
+            removeCondition(openCondition.tableName, openCondition.column)
+            setOpenColumn(null)
+          }}
+          onClose={() => setOpenColumn(null)}
+        />
+      )}
     </div>
   )
 }

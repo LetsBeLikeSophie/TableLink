@@ -84,6 +84,37 @@
   font-size: 15px;
 }
 
+.data-preview-bar-body {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.data-preview-th-open {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.column-filter-popover {
+  z-index: 200;
+  width: 260px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.column-filter-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
 .condition-join-row {
   display: flex;
   gap: 24px;
@@ -798,13 +829,13 @@
   font-size: 13px;
 }
 
-.field-cart-row-inputs {
+.condition-editor-inputs {
   display: flex;
   gap: 8px;
 }
 
-.field-cart-row-inputs select,
-.field-cart-row-inputs input {
+.condition-editor-inputs select,
+.condition-editor-inputs input {
   font: inherit;
   font-size: 13px;
   padding: 6px 8px;

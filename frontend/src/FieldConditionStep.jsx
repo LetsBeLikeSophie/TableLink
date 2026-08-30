@@ -1,19 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
-import { fetchColumnDomain } from './api'
+import { useMemo, useState } from 'react'
+import ConditionEditor, { OPERATORS_BY_VALUE_TYPE } from './ConditionEditor'
 
-export const OPERATORS_BY_VALUE_TYPE = {
-  CATEGORY: ['EQ', 'NEQ', 'IS_NULL', 'IS_NOT_NULL'],
-  FREE_TEXT: ['EQ', 'NEQ', 'LIKE', 'IS_NULL', 'IS_NOT_NULL'],
-  NUMBER: ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IS_NULL', 'IS_NOT_NULL'],
-  DATE: ['WITHIN_LAST_N_DAYS', 'OLDER_THAN_N_DAYS', 'EQ', 'GT', 'GTE', 'LT', 'LTE', 'IS_NULL', 'IS_NOT_NULL'],
-}
-
-const NO_VALUE_OPERATORS = new Set(['IS_NULL', 'IS_NOT_NULL'])
-const DAY_COUNT_OPERATORS = new Set(['WITHIN_LAST_N_DAYS', 'OLDER_THAN_N_DAYS'])
-// A closed set small enough to comfortably show as a dropdown. The backend caps
-// the query at 30 rows, so hitting that count means it's probably open-ended
-// free text rather than genuinely categorical (see ColumnDomainDto).
-const CLOSED_SET_MAX = 29
+export { OPERATORS_BY_VALUE_TYPE }
 
 function fieldKey(tableName, column) {
   return `${tableName}.${column}`
@@ -43,7 +31,7 @@ function DomainHint({ domainState, onHover }) {
           ) : domainState.data.values && domainState.data.values.length > 0 ? (
             <>
               값 ({domainState.data.values.length}
-              {domainState.data.values.length > CLOSED_SET_MAX ? '+' : ''}개):{' '}
+              {domainState.data.values.length > 29 ? '+' : ''}개):{' '}
               {domainState.data.values.slice(0, 12).join(', ')}
               {domainState.data.values.length > 12 ? ' ...' : ''}
             </>
@@ -56,13 +44,8 @@ function DomainHint({ domainState, onHover }) {
   )
 }
 
-function FieldConditionStep({ tables, conditions, onConditionsChange }) {
+function FieldConditionStep({ tables, conditions, onConditionsChange, domains, ensureDomain }) {
   const [query, setQuery] = useState('')
-  const [domains, setDomains] = useState({})
-  // Tracks which columns have already been fetched (or are in flight) so
-  // re-hovering a field doesn't re-request its domain every time — domain
-  // data doesn't change during a session, so once is enough.
-  const requestedDomainsRef = useRef(new Set())
 
   const allFields = useMemo(() => {
     const list = []
@@ -82,28 +65,6 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
 
   const isSelected = (tableName, column) =>
     conditions.some((c) => c.tableName === tableName && c.column === column)
-
-  const ensureDomain = (tableName, column) => {
-    const key = fieldKey(tableName, column)
-    if (requestedDomainsRef.current.has(key)) return
-    requestedDomainsRef.current.add(key)
-    setDomains((prev) => ({ ...prev, [key]: { loading: true } }))
-    fetchColumnDomain(tableName, column)
-      .then((data) => {
-        setDomains((prev) => ({ ...prev, [key]: { loading: false, data } }))
-        const isClosedSet = data.values && data.values.length > 0 && data.values.length <= CLOSED_SET_MAX
-        if (isClosedSet) {
-          const existing = conditions.find((c) => c.tableName === tableName && c.column === column)
-          if (existing && existing.operator !== 'EQ' && existing.operator !== 'NEQ') {
-            updateCondition(tableName, column, { operator: 'EQ', value: '' })
-          }
-        }
-      })
-      .catch((e) => {
-        requestedDomainsRef.current.delete(key) // let a later hover retry after a transient failure
-        setDomains((prev) => ({ ...prev, [key]: { loading: false, error: e.message } }))
-      })
-  }
 
   const addField = (field) => {
     if (isSelected(field.tableName, field.column)) return
@@ -165,18 +126,6 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
           <ul className="field-cart-list">
             {conditions.map((c) => {
               const key = fieldKey(c.tableName, c.column)
-              const domainState = domains[key]
-              const domainValues = domainState?.data?.values
-              const isClosedSet = domainValues && domainValues.length > 0 && domainValues.length <= CLOSED_SET_MAX
-              const showDropdown = isClosedSet
-              // A picked-from-a-list value is either a match or not — LIKE/NULL checks don't
-              // apply once we know the exact closed set of values.
-              const operatorChoices = isClosedSet ? ['EQ', 'NEQ'] : OPERATORS_BY_VALUE_TYPE[c.valueType]
-              const rangeHint =
-                domainState?.data?.min !== undefined && domainState?.data?.min !== null
-                  ? `${domainState.data.min} ~ ${domainState.data.max}`
-                  : '값'
-
               return (
                 <li key={key} className="field-cart-row">
                   <div className="field-cart-row-header">
@@ -184,7 +133,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
                       <span className="muted">{c.tableName}.</span>
                       {c.column}
                     </span>
-                    <DomainHint domainState={domainState} onHover={() => ensureDomain(c.tableName, c.column)} />
+                    <DomainHint domainState={domains[key]} onHover={() => ensureDomain(c.tableName, c.column)} />
                     <button
                       type="button"
                       className="link-button"
@@ -193,41 +142,11 @@ function FieldConditionStep({ tables, conditions, onConditionsChange }) {
                       제거
                     </button>
                   </div>
-                  <div className="field-cart-row-inputs">
-                    <select
-                      value={c.operator}
-                      onChange={(e) =>
-                        updateCondition(c.tableName, c.column, { operator: e.target.value, value: '' })
-                      }
-                    >
-                      {operatorChoices.map((op) => (
-                        <option key={op} value={op}>
-                          {op}
-                        </option>
-                      ))}
-                    </select>
-                    {!NO_VALUE_OPERATORS.has(c.operator) &&
-                      (showDropdown ? (
-                        <select
-                          value={c.value}
-                          onChange={(e) => updateCondition(c.tableName, c.column, { value: e.target.value })}
-                        >
-                          <option value="">선택</option>
-                          {domainValues.map((v) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder={DAY_COUNT_OPERATORS.has(c.operator) ? 'N일' : rangeHint}
-                          value={c.value}
-                          onChange={(e) => updateCondition(c.tableName, c.column, { value: e.target.value })}
-                        />
-                      ))}
-                  </div>
+                  <ConditionEditor
+                    condition={c}
+                    domainState={domains[key]}
+                    onChange={(patch) => updateCondition(c.tableName, c.column, patch)}
+                  />
                 </li>
               )
             })}
