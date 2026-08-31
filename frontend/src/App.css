@@ -695,6 +695,7 @@
   background: var(--code-bg);
   color: var(--text);
   font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 
