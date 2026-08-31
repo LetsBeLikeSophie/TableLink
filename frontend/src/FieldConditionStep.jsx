@@ -7,6 +7,14 @@ function fieldKey(tableName, column) {
   return `${tableName}.${column}`
 }
 
+const VALUE_TYPE_LABEL = {
+  FREE_TEXT: 'TEXT',
+}
+
+function valueTypeLabel(valueType) {
+  return VALUE_TYPE_LABEL[valueType] ?? valueType
+}
+
 function DomainHint({ domainState, onHover }) {
   const [open, setOpen] = useState(false)
 
@@ -46,6 +54,7 @@ function DomainHint({ domainState, onHover }) {
 
 function FieldConditionStep({ tables, conditions, onConditionsChange, domains, ensureDomain }) {
   const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const allFields = useMemo(() => {
     const list = []
@@ -86,6 +95,16 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
   return (
     <div className="field-cart-column">
         <div className="field-search-panel">
+          <button
+            type="button"
+            className="field-search-toggle"
+            onClick={() => setSearchOpen((o) => !o)}
+            aria-expanded={searchOpen}
+          >
+            <span>필드 목록 검색 ({allFields.length})</span>
+            <span className="field-search-toggle-icon">{searchOpen ? '▲' : '▼'}</span>
+          </button>
+          <div className={`field-search-body ${searchOpen ? 'open' : ''}`}>
           <input
             type="text"
             className="field-search-input"
@@ -111,18 +130,21 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
                       </span>
                     </button>
                     <DomainHint domainState={domains[key]} onHover={() => ensureDomain(f.tableName, f.column)} />
-                    <span className="badge badge-subtype">{f.valueType}</span>
+                    <span className="badge badge-subtype">{valueTypeLabel(f.valueType)}</span>
                   </div>
                 </li>
               )
             })}
             {filteredFields.length === 0 && <div className="empty-box">검색 결과가 없습니다.</div>}
           </ul>
+          </div>
         </div>
 
         <div className="field-cart-panel">
           <h3>담은 조건 ({conditions.length})</h3>
-          {conditions.length === 0 && <div className="empty-box">왼쪽에서 필드를 클릭해서 담으세요.</div>}
+          {conditions.length === 0 && (
+            <div className="empty-box">위 필드 목록이나 미리보기 표의 컬럼을 클릭해서 담으세요.</div>
+          )}
           <ul className="field-cart-list">
             {conditions.map((c) => {
               const key = fieldKey(c.tableName, c.column)
