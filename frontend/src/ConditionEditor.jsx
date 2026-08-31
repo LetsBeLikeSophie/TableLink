@@ -5,6 +5,20 @@ export const OPERATORS_BY_VALUE_TYPE = {
   DATE: ['WITHIN_LAST_N_DAYS', 'OLDER_THAN_N_DAYS', 'EQ', 'GT', 'GTE', 'LT', 'LTE', 'IS_NULL', 'IS_NOT_NULL'],
 }
 
+export const OPERATOR_LABEL = {
+  EQ: '=',
+  NEQ: '≠',
+  GT: '>',
+  GTE: '≥',
+  LT: '<',
+  LTE: '≤',
+  LIKE: '포함',
+  IS_NULL: '비어있음',
+  IS_NOT_NULL: '비어있지 않음',
+  WITHIN_LAST_N_DAYS: '최근 N일 이내',
+  OLDER_THAN_N_DAYS: 'N일 이전',
+}
+
 export const NO_VALUE_OPERATORS = new Set(['IS_NULL', 'IS_NOT_NULL'])
 export const DAY_COUNT_OPERATORS = new Set(['WITHIN_LAST_N_DAYS', 'OLDER_THAN_N_DAYS'])
 // A closed set small enough to comfortably show as a dropdown. The backend caps
@@ -35,7 +49,7 @@ function ConditionEditor({ condition, domainState, onChange }) {
       <select value={condition.operator} onChange={(e) => onChange({ operator: e.target.value, value: '' })}>
         {operatorChoices.map((op) => (
           <option key={op} value={op}>
-            {op}
+            {OPERATOR_LABEL[op] ?? op}
           </option>
         ))}
       </select>

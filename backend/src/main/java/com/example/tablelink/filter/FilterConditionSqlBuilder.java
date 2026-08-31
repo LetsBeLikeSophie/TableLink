@@ -16,15 +16,22 @@ public class FilterConditionSqlBuilder {
     public record Fragment(String sql, List<Object> params) {
     }
 
-    public Fragment build(FilterCondition condition) {
+    /**
+     * sqlType is the column's real {@code information_schema.columns.data_type}
+     * (e.g. "integer", "date"). JDBC sends every bind parameter here as text,
+     * so without an explicit {@code ?::type} cast Postgres rejects comparisons
+     * like {@code integer < character varying} against numeric/date columns.
+     */
+    public Fragment build(FilterCondition condition, String sqlType) {
         String col = condition.tableName() + "." + condition.column();
+        String placeholder = "?::" + sqlType;
         return switch (condition.operator()) {
-            case EQ -> new Fragment(col + " = ?", List.of(condition.value()));
-            case NEQ -> new Fragment(col + " != ?", List.of(condition.value()));
-            case GT -> new Fragment(col + " > ?", List.of(condition.value()));
-            case GTE -> new Fragment(col + " >= ?", List.of(condition.value()));
-            case LT -> new Fragment(col + " < ?", List.of(condition.value()));
-            case LTE -> new Fragment(col + " <= ?", List.of(condition.value()));
+            case EQ -> new Fragment(col + " = " + placeholder, List.of(condition.value()));
+            case NEQ -> new Fragment(col + " != " + placeholder, List.of(condition.value()));
+            case GT -> new Fragment(col + " > " + placeholder, List.of(condition.value()));
+            case GTE -> new Fragment(col + " >= " + placeholder, List.of(condition.value()));
+            case LT -> new Fragment(col + " < " + placeholder, List.of(condition.value()));
+            case LTE -> new Fragment(col + " <= " + placeholder, List.of(condition.value()));
             case LIKE -> new Fragment(col + " LIKE ?", List.of("%" + condition.value() + "%"));
             case IS_NULL -> new Fragment(col + " IS NULL", List.of());
             case IS_NOT_NULL -> new Fragment(col + " IS NOT NULL", List.of());

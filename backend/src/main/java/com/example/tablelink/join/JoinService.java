@@ -124,13 +124,14 @@ public class JoinService {
                         "조인에 포함되지 않은 테이블은 필터할 수 없습니다: " + filter.tableName());
             }
             ResolvedTable table = tableSchemaResolver.resolve(filter.tableName());
-            boolean validColumn = table.columns().stream().anyMatch(c -> c.name().equals(filter.column()));
-            if (!validColumn) {
-                throw new FilterValidationException(
-                        "테이블 " + filter.tableName() + "에 존재하지 않는 컬럼입니다: " + filter.column());
-            }
+            ColumnInfo column = table.columns().stream()
+                    .filter(c -> c.name().equals(filter.column()))
+                    .findFirst()
+                    .orElseThrow(() -> new FilterValidationException(
+                            "테이블 " + filter.tableName() + "에 존재하지 않는 컬럼입니다: " + filter.column()));
             FilterConditionSqlBuilder.Fragment fragment = filterConditionSqlBuilder.build(
-                    new FilterCondition(filter.tableName(), filter.column(), filter.operator(), filter.value()));
+                    new FilterCondition(filter.tableName(), filter.column(), filter.operator(), filter.value()),
+                    column.sqlType());
             fragments.add(fragment.sql());
             params.addAll(fragment.params());
         }
