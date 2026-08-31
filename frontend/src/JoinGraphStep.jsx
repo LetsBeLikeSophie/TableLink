@@ -53,7 +53,9 @@ function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, onC
 function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onChainChange, embedded }) {
   const { screenToFlowPosition } = useReactFlow()
 
-  const [requiredTables, setRequiredTables] = useState([])
+  // Defaults the preview to the customer table before any condition is picked,
+  // since customer targeting is what this tool is for.
+  const [manualTables, setManualTables] = useState(['customer'])
   const [manualAddValue, setManualAddValue] = useState('')
   const [nodePositions, setNodePositions] = useState({})
   const [latestOnlyOverrides, setLatestOnlyOverrides] = useState({})
@@ -71,15 +73,19 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
     return map
   }, [tables])
 
-  // Pull in tables required by the field/condition step (additive — never removes
-  // a table the user has since deleted here).
-  useEffect(() => {
-    if (!initialTables || initialTables.length === 0) return
-    setRequiredTables((prev) => {
-      const additions = initialTables.filter((t) => tableByName[t] && !prev.includes(t))
-      return additions.length > 0 ? [...prev, ...additions] : prev
+  // requiredTables tracks the field/condition step exactly (adds AND removes as
+  // conditions change) unioned with tables the user placed manually (drag-drop
+  // or the "+ 테이블 직접 추가" picker), which stay until explicitly removed here.
+  const requiredTables = useMemo(() => {
+    const set = new Set()
+    ;(initialTables || []).forEach((t) => {
+      if (tableByName[t]) set.add(t)
     })
-  }, [initialTables, tableByName])
+    manualTables.forEach((t) => {
+      if (tableByName[t]) set.add(t)
+    })
+    return [...set]
+  }, [initialTables, manualTables, tableByName])
 
   const plan = useMemo(() => computeConnectingPlan(tables, requiredTables), [tables, requiredTables])
 
@@ -109,7 +115,7 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
 
   const addRequiredTable = useCallback(
     (tableName, position) => {
-      setRequiredTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
+      setManualTables((prev) => (prev.includes(tableName) ? prev : [...prev, tableName]))
       if (position) {
         setNodePositions((prev) => ({ ...prev, [tableName]: position }))
       }
@@ -118,7 +124,7 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
   )
 
   const removeRequiredTable = useCallback((tableName) => {
-    setRequiredTables((prev) => prev.filter((t) => t !== tableName))
+    setManualTables((prev) => prev.filter((t) => t !== tableName))
   }, [])
 
   const onDrop = useCallback(
