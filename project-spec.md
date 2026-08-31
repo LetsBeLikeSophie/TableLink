@@ -405,20 +405,29 @@ WHERE EXISTS (
 `/tablelink` 경로를 써서, 도메인 루트는 포트폴리오 목록 페이지가 차지하고 TableLink는
 그 목록의 항목 중 하나로 들어가는 구조.
 
-- **서버**: Oracle Cloud 무료 티어 인스턴스(RAM 1GB) 한 대를 다른 프로젝트(`issue-pop`,
-  `newstrend-api`)와 공유. 포트폴리오 규모에서는 프로젝트별로 서버를 나누기보다 nginx
-  가상 호스트로 한 서버에 모으는 쪽이 비용/관리 면에서 합리적이라 판단
-- **백엔드**: 로컬에서 빌드한 JAR를 서버로 전송 후 systemd 서비스(`tablelink-backend.service`,
-  포트 8081)로 상시 구동. 메모리 제약 때문에 `-Xmx256m -Xss512k`로 힙을 제한. 서버 자체
-  Maven 빌드는 메모리 위험이 커서 하지 않음 — 로컬 빌드 후 전송하는 방식으로 고정
-- **DB**: 서버에 Docker 대신 네이티브 PostgreSQL 16 설치(메모리 절약). `tablelink` 전용
-  DB/role 생성, 비밀번호는 systemd unit의 `Environment=`로만 주입하고 git에는 커밋하지 않음
+- **서버 구성 (2대)**: Oracle Cloud 무료 티어 인스턴스 두 대를 역할로 분리.
+  - **엣지 인스턴스** (`168.110.25.49`): DNS/TLS/포트폴리오 홈이 있는 진입점. 다른 프로젝트
+    (`issue-pop`, `newstrend-api`)와 같이 쓰다 보니 RAM 1GB를 나눠 써서 TableLink API가
+    1~2초대로 느려지는 문제가 있었음
+  - **오리진 인스턴스** (`132.226.5.94`): TableLink 백엔드/DB 전용으로 새로 추가. 같은 VCN
+    (`issue-pop`)이라 Security List가 공유돼서 80번 포트는 별도 설정 없이 바로 열려 있었음.
+    이 분리로 응답 시간이 1~2.6초 → 0.4~0.5초로 개선
+  - 엣지 인스턴스의 nginx가 `/tablelink/`, `/tablelink/api/` 요청을 전부 오리진 인스턴스의
+    80번 포트로 `proxy_pass`(더블 프록시). DNS/인증서는 엣지에 그대로 두고 TableLink 부분만
+    물리적으로 옮기는 방식이라 DNS 재설정이나 인증서 재발급이 필요 없었음
+- **백엔드**: 로컬에서 빌드한 JAR를 오리진 인스턴스로 전송 후 systemd 서비스
+  (`tablelink-backend.service`, 포트 8081)로 상시 구동. 메모리 제약 때문에
+  `-Xmx256m -Xss512k`로 힙을 제한. 서버 자체 Maven 빌드는 메모리 위험이 커서 하지 않음 —
+  로컬 빌드 후 전송하는 방식으로 고정
+- **DB**: 오리진 인스턴스에 Docker 대신 네이티브 PostgreSQL 16 설치(메모리 절약). `tablelink`
+  전용 DB/role 생성, 비밀번호는 systemd unit의 `Environment=`로만 주입하고 git에는 커밋하지 않음
 - **프론트엔드**: Vite `base`를 빌드 시에만 `/tablelink/`로 전환하고, `api.js`가
   `import.meta.env.BASE_URL` 기반으로 `/tablelink/api` 프리픽스를 붙여 요청. 빌드 산출물을
-  로컬에서 만들어 서버의 `/var/www/tablelink`로 전송
-- **nginx**: `itssophie.dev` 서버 블록 하나로 루트(`/var/www/portfolio`, 포트폴리오 홈),
-  `/tablelink/`(정적 SPA, alias + `try_files ... /tablelink/index.html`),
-  `/tablelink/api/`(백엔드 8081로 리버스 프록시, 프리픽스 스트립)를 모두 처리. 기존
-  `api.issue-pop.com` 서버 블록과 같은 nginx 인스턴스에서 `server_name`으로 분기
-- **HTTPS**: DNS A 레코드(`itssophie.dev` → 서버 공인 IP)를 도메인 등록기관에서 연결한 뒤
-  certbot으로 인증서 발급 예정 (DNS 전파 전이라 아직 HTTP만 서빙 중)
+  로컬에서 만들어 오리진 인스턴스의 `/var/www/tablelink`로 전송
+- **nginx**: 오리진 인스턴스는 `/tablelink/`(정적 SPA)와 `/tablelink/api/`(백엔드 8081로
+  리버스 프록시)를 자체 처리. 엣지 인스턴스는 루트(`/var/www/portfolio`, 포트폴리오 홈)를
+  직접 서빙하고 `/tablelink/`, `/tablelink/api/`는 오리진 인스턴스로 프록시만 함. 엣지의 기존
+  `api.issue-pop.com` 서버 블록과는 같은 nginx 인스턴스에서 `server_name`으로 분기
+- **HTTPS**: 도메인은 Cloudflare로 관리, DNS는 `itssophie.dev`/`www` A 레코드를 엣지 인스턴스
+  공인 IP로 "DNS only"(프록시 끔)로 연결해 certbot HTTP-01 인증이 가능하게 함. 엣지 인스턴스에
+  certbot으로 Let's Encrypt 인증서 발급, HTTP→HTTPS 자동 리다이렉트 + 자동 갱신 설정 완료
