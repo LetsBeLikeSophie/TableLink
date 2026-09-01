@@ -53,9 +53,7 @@ function JoinGraphStep({ tables, initialTables, conditions, onPreviewChange, onC
 function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onChainChange, embedded }) {
   const { screenToFlowPosition } = useReactFlow()
 
-  // Defaults the preview to the customer table before any condition is picked,
-  // since customer targeting is what this tool is for.
-  const [manualTables, setManualTables] = useState(['customer'])
+  const [manualTables, setManualTables] = useState([])
   const [manualAddValue, setManualAddValue] = useState('')
   const [nodePositions, setNodePositions] = useState({})
   const [latestOnlyOverrides, setLatestOnlyOverrides] = useState({})
@@ -76,8 +74,14 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
   // requiredTables tracks the field/condition step exactly (adds AND removes as
   // conditions change) unioned with tables the user placed manually (drag-drop
   // or the "+ 테이블 직접 추가" picker), which stay until explicitly removed here.
+  // 'customer' is always pinned first so it's always the join tree's root —
+  // this tool targets customers, so results/percentages must always be
+  // counted against the customer table, never whichever table a filter
+  // happened to be added on first (see computeConnectingPlan: it roots the
+  // BFS tree at requiredTableNames[0]).
   const requiredTables = useMemo(() => {
     const set = new Set()
+    if (tableByName.customer) set.add('customer')
     ;(initialTables || []).forEach((t) => {
       if (tableByName[t]) set.add(t)
     })

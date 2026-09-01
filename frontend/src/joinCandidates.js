@@ -118,7 +118,19 @@ export function computeConnectingPlan(tables, requiredTableNames) {
       const to = best.path[i]
       if (!included.has(to)) {
         const type = joinTypeOf(tableByName[from], tableByName[to])
-        edges.push({ fromTable: from, toTable: to, latestOnly: type === 'STATE_HISTORY' })
+        // `from` is always the side already anchored in the tree (either the
+        // BFS source or a node added by an earlier step of this same path);
+        // `to` is always the side newly entering it. "Latest only" narrows a
+        // HISTORY table down relative to an already-known parent (e.g.
+        // "customer's currently active ownership"), so it only makes sense
+        // when the HISTORY table is the one newly arriving (from=STATE).
+        // When a HISTORY table already in the tree branches out to a further
+        // STATE table (e.g. service_history -> dealer, just to read which
+        // dealer performed it), that's an attribute lookup, not a narrowing —
+        // defaulting latestOnly on there would wrongly AND in "latest per
+        // dealer" on top of whatever already pinned the history table.
+        const latestOnly = type === 'STATE_HISTORY' && tableByName[from].type === 'STATE'
+        edges.push({ fromTable: from, toTable: to, latestOnly })
         included.add(to)
       }
     }
