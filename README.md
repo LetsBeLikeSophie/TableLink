@@ -66,6 +66,65 @@ JOIN service_history s
 
 ---
 
+## 설계 아이디어: 유저·국가별 데이터 격리 (설계만, 미구현)
+
+"로그인한 유저마다 자기 국가의 데이터만 봐야 한다"는 요구를 가정하고 설계까지 검토해본
+내용입니다. **코드로는 아직 구현하지 않았습니다.**
+
+### 어디에 경계를 둘지
+
+```mermaid
+graph TD
+  customer["customer (STATE)<br/>country + RLS"]
+  dealer["dealer (STATE)<br/>country + RLS"]
+  vehicle["vehicle (STATE)<br/>country + RLS"]
+  ownership["ownership_history<br/>country + RLS"]
+  service["service_history<br/>country + RLS"]
+  warranty["warranty_claim_history<br/>country + RLS"]
+  price["price_history<br/>country + RLS"]
+
+  customer --> vehicle
+  customer --> ownership
+  vehicle --> ownership
+  vehicle --> service
+  dealer --> service
+  vehicle --> warranty
+  vehicle --> price
+```
+
+처음엔 "`customer`가 항상 조인 트리의 루트로 고정돼 있으니 `customer`/`dealer` 두 테이블에만
+country + RLS를 걸면 나머지는 FK를 타고 자동으로 보호된다"고 생각했습니다. 그런데
+`GET /tables/{name}/preview`, `.../columns/{col}/domain`처럼 **조인 엔진을 거치지 않고
+테이블에 바로 쿼리하는 엔드포인트**가 이미 있다는 걸 떠올리면 이 전제가 깨집니다 —
+`vehicle`을 직접 찍으면 조인 루트와 무관하게 전체 국가 데이터가 다 보입니다. 그래서 실제로는
+7개 테이블 전부에 country + RLS를 거는 쪽이 맞다는 결론으로 바뀌었습니다.
+
+### 접근 방식
+
+Postgres Row-Level Security로 걸어서, 애플리케이션의 SQL 생성 로직(`JoinService` 등)은
+country를 아예 몰라도 되게 하는 것이 핵심입니다. 어떤 조인 모양이 생성되든 DB가 알아서
+걸러주기 때문에, 이 프로젝트의 핵심 가치인 "동적 SQL 생성"과 잘 맞습니다.
+
+- `ALTER TABLE ... ENABLE/FORCE ROW LEVEL SECURITY` — `FORCE`가 없으면 테이블 소유자(앱 DB
+  계정)는 정책을 그냥 무시하고 지나가서, 결과적으로 필터링이 하나도 안 걸림
+- SELECT용 정책 `USING (country = current_setting('app.current_country', true))`과, 시드
+  데이터 삽입을 막지 않도록 별도의 INSERT용 `WITH CHECK (true)` 정책을 분리
+- 요청마다 트랜잭션 안에서 `SELECT set_config('app.current_country', ?, true)`를 먼저
+  실행 — 커넥션 풀(HikariCP)이 이전 요청의 설정을 다음 요청에 물려주지 않도록, 세션 전역
+  `SET`이 아니라 트랜잭션 범위인 `SET LOCAL`/`set_config(..., is_local=true)`을 씀
+
+### 실무라면 더 신경 써야 할 것 (짧게)
+
+1. 7개 테이블 전부 안 막으면 방어심층이 아니라 단일 지점 방어 (위에서 실제로 겪은 문제)
+2. GUC 미설정 시 결과가 조용히 0건 — 에러가 아니라서 디버깅 함정
+3. 원래 오토커밋이던 조회를 트랜잭션으로 감싸는 오버헤드
+4. 세션 쿠키가 이중 프록시(엣지→오리진)를 거치므로 `credentials: 'include'`, 쿠키 도메인/경로 확인 필요
+5. "쉬운 비밀번호 + 해시"는 유출 방지일 뿐, rate limiting 없인 무차별 대입에 그대로 노출
+6. `country`가 인증 스코프·언어·데이터 테넌시를 한 필드로 겸함 — 실제 시스템이면 분리가 맞음
+7. 유저 2명짜리 문제에 DB 레벨 RLS까지 쓰는 건 문제 크기 대비 과함 — 여기선 기법을 보여주려는 의도적 선택
+
+---
+
 ## 기술 스택
 
 - **Backend**: Spring Boot 4.1.1 (Java 21), Spring Data JPA, JdbcTemplate
