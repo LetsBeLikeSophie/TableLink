@@ -57,6 +57,43 @@
   font-size: 24px;
 }
 
+.demo-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  background: var(--bg);
+}
+
+.demo-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.demo-account-row:hover .mono {
+  color: var(--accent);
+}
+
+.demo-account-row .mono {
+  font-size: 13px;
+}
+
+.demo-account-row .muted {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .login-card input {
   font: inherit;
   padding: 10px 12px;
@@ -66,7 +103,7 @@
   color: var(--text);
 }
 
-.login-card button {
+.login-card button[type='submit'] {
   font: inherit;
   padding: 10px 12px;
   border-radius: 6px;
@@ -76,7 +113,7 @@
   cursor: pointer;
 }
 
-.login-card button:disabled {
+.login-card button[type='submit']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

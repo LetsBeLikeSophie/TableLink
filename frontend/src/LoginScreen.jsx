@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { login } from './api'
 
+const DEMO_ACCOUNTS = [
+  { username: 'kr_user', password: 'tablelink1234', label: 'KR — 한국어 데이터셋' },
+  { username: 'us_user', password: 'tablelink1234', label: 'US — 영어 데이터셋' },
+]
+
 function LoginScreen({ onLoggedIn }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -25,7 +30,25 @@ function LoginScreen({ onLoggedIn }) {
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
         <h1>TableLink</h1>
-        <p className="muted">국가별로 다른 데이터가 보이는 로그인 데모입니다 (kr_user / us_user).</p>
+        <p className="muted">국가별로 다른 데이터가 보이는 로그인 데모입니다.</p>
+
+        <div className="demo-accounts">
+          {DEMO_ACCOUNTS.map((acc) => (
+            <button
+              type="button"
+              key={acc.username}
+              className="demo-account-row"
+              onClick={() => {
+                setUsername(acc.username)
+                setPassword(acc.password)
+              }}
+            >
+              <span className="mono">{acc.username} / {acc.password}</span>
+              <span className="muted">{acc.label}</span>
+            </button>
+          ))}
+        </div>
+
         <input
           type="text"
           placeholder="아이디"
