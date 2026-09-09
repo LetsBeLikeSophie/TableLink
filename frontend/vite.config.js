@@ -11,6 +11,7 @@ export default defineConfig(({ command }) => ({
       '/tables': 'http://localhost:8080',
       '/joins': 'http://localhost:8080',
       '/segments': 'http://localhost:8080',
+      '/auth': 'http://localhost:8080',
     },
   },
 }))

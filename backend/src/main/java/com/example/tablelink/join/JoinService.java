@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.tablelink.common.query.PreviewQueryExecutor;
 import com.example.tablelink.common.query.PreviewResult;
@@ -17,6 +18,7 @@ import com.example.tablelink.join.dto.JoinChainRequest;
 import com.example.tablelink.join.dto.JoinChainResponse;
 import com.example.tablelink.join.dto.JoinEdgeRequest;
 import com.example.tablelink.join.dto.JoinEdgeResult;
+import com.example.tablelink.security.RlsCountryContext;
 import com.example.tablelink.tablemeta.schema.ColumnInfo;
 import com.example.tablelink.tablemeta.schema.ForeignKeyInfo;
 import com.example.tablelink.tablemeta.schema.ResolvedTable;
@@ -34,6 +36,7 @@ public class JoinService {
     private final JoinStrategyFactory joinStrategyFactory;
     private final PreviewQueryExecutor previewQueryExecutor;
     private final FilterConditionSqlBuilder filterConditionSqlBuilder;
+    private final RlsCountryContext rlsCountryContext;
 
     /**
      * left/right join columns for one edge, and whether the two tables share
@@ -48,7 +51,9 @@ public class JoinService {
     public record ResolvedJoinChain(List<String> tableOrder, List<JoinEdgeResult> edges) {
     }
 
+    @Transactional
     public JoinChainResponse buildChain(JoinChainRequest request) {
+        rlsCountryContext.applyCurrentUserCountry();
         ResolvedJoinChain chain = resolveChain(request.rootTable(), request.edges());
         String sql = buildSelectAllSql(chain);
 

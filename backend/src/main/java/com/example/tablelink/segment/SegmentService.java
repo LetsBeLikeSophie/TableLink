@@ -7,12 +7,14 @@ import java.util.stream.Collectors;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.tablelink.common.query.PreviewQueryExecutor;
 import com.example.tablelink.common.query.PreviewResult;
 import com.example.tablelink.join.JoinService;
 import com.example.tablelink.join.JoinValidationException;
 import com.example.tablelink.join.dto.JoinChainRequest;
+import com.example.tablelink.security.RlsCountryContext;
 import com.example.tablelink.tablemeta.schema.ColumnInfo;
 import com.example.tablelink.tablemeta.schema.ResolvedTable;
 import com.example.tablelink.tablemeta.schema.TableSchemaResolver;
@@ -31,8 +33,11 @@ public class SegmentService {
     private final TableSchemaResolver tableSchemaResolver;
     private final PreviewQueryExecutor previewQueryExecutor;
     private final JdbcTemplate jdbcTemplate;
+    private final RlsCountryContext rlsCountryContext;
 
+    @Transactional
     public SegmentResultResponse run(JoinChainRequest request) {
+        rlsCountryContext.applyCurrentUserCountry();
         JoinService.ResolvedJoinChain chain = joinService.resolveChain(request.rootTable(), request.edges());
         String rootTable = chain.tableOrder().get(0);
         ResolvedTable root = tableSchemaResolver.resolve(rootTable);

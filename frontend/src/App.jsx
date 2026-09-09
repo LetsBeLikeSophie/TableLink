@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import { fetchDiscoveredTables, fetchColumnDomain } from './api'
+import { fetchDiscoveredTables, fetchColumnDomain, fetchCurrentUser, logout } from './api'
 import FieldConditionStep, { OPERATORS_BY_VALUE_TYPE } from './FieldConditionStep'
 import JoinGraphStep from './JoinGraphStep'
 import DataPreviewTable from './DataPreviewTable'
 import ColumnFilterPopover from './ColumnFilterPopover'
 import ResultsStep from './ResultsStep'
+import LoginScreen from './LoginScreen'
 
 const STEPS = ['조건 선택', '결과']
 
@@ -42,6 +43,8 @@ function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColum
 }
 
 function App() {
+  // undefined = still checking session, null = not logged in, object = logged in
+  const [user, setUser] = useState(undefined)
   const [step, setStep] = useState(0)
   const [tables, setTables] = useState([])
   const [tablesLoading, setTablesLoading] = useState(true)
@@ -52,6 +55,10 @@ function App() {
   const [domains, setDomains] = useState({})
   const [openColumn, setOpenColumn] = useState(null) // { qualified, rect } | null
   const requestedDomainsRef = useRef(new Set())
+
+  useEffect(() => {
+    fetchCurrentUser().then(setUser)
+  }, [])
 
   const refreshTables = useCallback(async () => {
     setTablesError(null)
@@ -65,9 +72,11 @@ function App() {
     }
   }, [])
 
+  // Only fetch data once a session is confirmed — otherwise every table/domain
+  // fetch would 401 before the login screen even has a chance to show.
   useEffect(() => {
-    refreshTables()
-  }, [refreshTables])
+    if (user) refreshTables()
+  }, [user, refreshTables])
 
   const initialJoinTables = useMemo(
     () => [...new Set(fieldConditions.map((c) => c.tableName))],
@@ -140,11 +149,31 @@ function App() {
 
   const openCondition = openColumn ? fieldConditions.find((c) => fieldKey(c.tableName, c.column) === openColumn.qualified) : null
 
+  if (user === undefined) {
+    return <div className="empty-box tall">불러오는 중...</div>
+  }
+  if (user === null) {
+    return <LoginScreen onLoggedIn={() => fetchCurrentUser().then(setUser)} />
+  }
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>TableLink</h1>
-        <p className="muted">테이블 조인 &amp; 세그먼트 필터 도구</p>
+        <div>
+          <h1>TableLink</h1>
+          <p className="muted">테이블 조인 &amp; 세그먼트 필터 도구</p>
+        </div>
+        <div className="user-badge">
+          <span className="badge badge-type">{user.country}</span>
+          <span className="muted">{user.username}</span>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => logout().then(() => setUser(null))}
+          >
+            로그아웃
+          </button>
+        </div>
       </header>
 
       <nav className="stepper">

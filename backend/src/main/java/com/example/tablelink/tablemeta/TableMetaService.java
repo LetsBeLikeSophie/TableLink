@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.tablelink.common.query.PreviewQueryExecutor;
 import com.example.tablelink.common.query.PreviewResult;
+import com.example.tablelink.security.RlsCountryContext;
 import com.example.tablelink.tablemeta.dto.ColumnDomainDto;
 import com.example.tablelink.tablemeta.dto.DiscoveredTableDto;
 import com.example.tablelink.tablemeta.dto.FilterableColumnDto;
@@ -45,8 +46,10 @@ public class TableMetaService {
     private final TableSchemaResolver tableSchemaResolver;
     private final PreviewQueryExecutor previewQueryExecutor;
     private final JdbcTemplate jdbcTemplate;
+    private final RlsCountryContext rlsCountryContext;
 
     public ColumnDomainDto columnDomain(String tableName, String columnName) {
+        rlsCountryContext.applyCurrentUserCountry();
         ResolvedTable table = tableSchemaResolver.resolve(tableName);
         if (table == null) {
             throw new TableMetaValidationException("존재하지 않는 테이블입니다: " + tableName);
@@ -79,6 +82,7 @@ public class TableMetaService {
     }
 
     public PreviewResult previewTable(String tableName) {
+        rlsCountryContext.applyCurrentUserCountry();
         ResolvedTable table = tableSchemaResolver.resolve(tableName);
         if (table == null) {
             throw new TableMetaValidationException("존재하지 않는 테이블입니다: " + tableName);

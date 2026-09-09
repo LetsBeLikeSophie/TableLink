@@ -8,8 +8,46 @@ function apiUrl(path) {
   return `${API_BASE}${path}`
 }
 
+// Every call needs the session cookie (Spring Security auth) sent along, and
+// the app is behind auth entirely — a 401 anywhere means "not logged in",
+// which App.jsx treats as a signal to show the login screen rather than an
+// error banner.
+async function apiFetch(path, options = {}) {
+  const res = await fetch(apiUrl(path), { ...options, credentials: 'include' })
+  if (res.status === 401) {
+    const err = new Error('로그인이 필요합니다.')
+    err.unauthorized = true
+    throw err
+  }
+  return res
+}
+
+export async function login(username, password) {
+  const res = await fetch(apiUrl('/auth/login'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ username, password }),
+  })
+  if (!res.ok) {
+    throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.')
+  }
+}
+
+export async function logout() {
+  await fetch(apiUrl('/auth/logout'), { method: 'POST', credentials: 'include' })
+}
+
+/** Returns {username, country}, or null if not logged in. */
+export async function fetchCurrentUser() {
+  const res = await fetch(apiUrl('/auth/me'), { credentials: 'include' })
+  if (res.status === 401) return null
+  if (!res.ok) throw new Error(`로그인 상태 확인 실패 (HTTP ${res.status})`)
+  return res.json()
+}
+
 export async function fetchDiscoveredTables() {
-  const res = await fetch(apiUrl('/tables/discover'))
+  const res = await apiFetch('/tables/discover')
   if (!res.ok) {
     throw new Error(`테이블 목록을 불러오지 못했습니다 (HTTP ${res.status})`)
   }
@@ -17,7 +55,7 @@ export async function fetchDiscoveredTables() {
 }
 
 export async function fetchTablePreview(tableName) {
-  const res = await fetch(apiUrl(`/tables/${encodeURIComponent(tableName)}/preview`))
+  const res = await apiFetch(`/tables/${encodeURIComponent(tableName)}/preview`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.message || `미리보기 조회 실패 (HTTP ${res.status})`)
@@ -26,8 +64,8 @@ export async function fetchTablePreview(tableName) {
 }
 
 export async function fetchColumnDomain(tableName, column) {
-  const res = await fetch(
-    apiUrl(`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(column)}/domain`),
+  const res = await apiFetch(
+    `/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(column)}/domain`,
   )
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -37,7 +75,7 @@ export async function fetchColumnDomain(tableName, column) {
 }
 
 export async function buildJoinChain(rootTable, edges, filters = []) {
-  const res = await fetch(apiUrl('/joins'), {
+  const res = await apiFetch('/joins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rootTable, edges, filters }),
@@ -50,7 +88,7 @@ export async function buildJoinChain(rootTable, edges, filters = []) {
 }
 
 export async function runSegment(rootTable, edges, filters = []) {
-  const res = await fetch(apiUrl('/segments'), {
+  const res = await apiFetch('/segments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rootTable, edges, filters }),
@@ -63,7 +101,7 @@ export async function runSegment(rootTable, edges, filters = []) {
 }
 
 export async function saveFilterableColumns(tableName, filterableColumns) {
-  const res = await fetch(apiUrl(`/tables/${encodeURIComponent(tableName)}/filterable-columns`), {
+  const res = await apiFetch(`/tables/${encodeURIComponent(tableName)}/filterable-columns`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filterableColumns }),
