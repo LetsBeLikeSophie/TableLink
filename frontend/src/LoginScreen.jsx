@@ -4,6 +4,7 @@ import { login } from './api'
 const DEMO_ACCOUNTS = [
   { username: 'kr_user', password: 'tablelink1234', label: 'KR — 한국어 데이터셋' },
   { username: 'us_user', password: 'tablelink1234', label: 'US — 영어 데이터셋' },
+  { username: 'admin', password: 'tablelink1234', label: 'ALL — 국가 제한 없음' },
 ]
 
 function LoginScreen({ onLoggedIn }) {

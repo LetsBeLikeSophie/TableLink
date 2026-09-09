@@ -12,10 +12,12 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Two hardcoded demo accounts, one per country — see README "설계 아이디어:
- * 유저·국가별 데이터 격리". The country lives as a granted authority
- * (COUNTRY_KR / COUNTRY_US) rather than a separate lookup table, since with
- * only two static accounts a real users table would be pure ceremony.
+ * Three hardcoded demo accounts — see README "유저·국가별 데이터 격리". The
+ * country lives as a granted authority (COUNTRY_KR / COUNTRY_US / COUNTRY_ALL)
+ * rather than a separate lookup table, since with only a handful of static
+ * accounts a real users table would be pure ceremony. COUNTRY_ALL is the
+ * admin escape hatch — see the matching "OR ... = 'ALL'" clause on every RLS
+ * policy in schema.sql.
  */
 @Configuration
 public class SecurityConfig {
@@ -35,7 +37,11 @@ public class SecurityConfig {
                 .password(encoder.encode("tablelink1234"))
                 .authorities("COUNTRY_US")
                 .build();
-        return new InMemoryUserDetailsManager(krUser, usUser);
+        UserDetails admin = User.withUsername("admin")
+                .password(encoder.encode("tablelink1234"))
+                .authorities("COUNTRY_ALL")
+                .build();
+        return new InMemoryUserDetailsManager(krUser, usUser, admin);
     }
 
     @Bean

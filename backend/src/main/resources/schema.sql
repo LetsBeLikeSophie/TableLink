@@ -100,48 +100,48 @@ ALTER TABLE price_history ADD COLUMN IF NOT EXISTS country VARCHAR(2) NOT NULL D
 ALTER TABLE customer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS customer_select_by_country ON customer;
-CREATE POLICY customer_select_by_country ON customer FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY customer_select_by_country ON customer FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS customer_seed_insert ON customer;
 CREATE POLICY customer_seed_insert ON customer FOR INSERT WITH CHECK (true);
 
 ALTER TABLE dealer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dealer FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS dealer_select_by_country ON dealer;
-CREATE POLICY dealer_select_by_country ON dealer FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY dealer_select_by_country ON dealer FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS dealer_seed_insert ON dealer;
 CREATE POLICY dealer_seed_insert ON dealer FOR INSERT WITH CHECK (true);
 
 ALTER TABLE vehicle ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS vehicle_select_by_country ON vehicle;
-CREATE POLICY vehicle_select_by_country ON vehicle FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY vehicle_select_by_country ON vehicle FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS vehicle_seed_insert ON vehicle;
 CREATE POLICY vehicle_seed_insert ON vehicle FOR INSERT WITH CHECK (true);
 
 ALTER TABLE ownership_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ownership_history FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ownership_history_select_by_country ON ownership_history;
-CREATE POLICY ownership_history_select_by_country ON ownership_history FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY ownership_history_select_by_country ON ownership_history FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS ownership_history_seed_insert ON ownership_history;
 CREATE POLICY ownership_history_seed_insert ON ownership_history FOR INSERT WITH CHECK (true);
 
 ALTER TABLE service_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE service_history FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS service_history_select_by_country ON service_history;
-CREATE POLICY service_history_select_by_country ON service_history FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY service_history_select_by_country ON service_history FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS service_history_seed_insert ON service_history;
 CREATE POLICY service_history_seed_insert ON service_history FOR INSERT WITH CHECK (true);
 
 ALTER TABLE warranty_claim_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE warranty_claim_history FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS warranty_claim_history_select_by_country ON warranty_claim_history;
-CREATE POLICY warranty_claim_history_select_by_country ON warranty_claim_history FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY warranty_claim_history_select_by_country ON warranty_claim_history FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS warranty_claim_history_seed_insert ON warranty_claim_history;
 CREATE POLICY warranty_claim_history_seed_insert ON warranty_claim_history FOR INSERT WITH CHECK (true);
 
 ALTER TABLE price_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE price_history FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS price_history_select_by_country ON price_history;
-CREATE POLICY price_history_select_by_country ON price_history FOR SELECT USING (country = current_setting('app.current_country', true));
+CREATE POLICY price_history_select_by_country ON price_history FOR SELECT USING (country = current_setting('app.current_country', true) OR current_setting('app.current_country', true) = 'ALL');
 DROP POLICY IF EXISTS price_history_seed_insert ON price_history;
 CREATE POLICY price_history_seed_insert ON price_history FOR INSERT WITH CHECK (true);
