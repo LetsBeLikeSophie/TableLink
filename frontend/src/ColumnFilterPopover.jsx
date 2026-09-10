@@ -59,7 +59,7 @@ function ColumnFilterPopover({ anchorRect, condition, domainState, onChange, onR
           제거
         </button>
       </div>
-      <ConditionEditor condition={condition} domainState={domainState} onChange={onChange} />
+      <ConditionEditor condition={condition} domainState={domainState} onChange={onChange} onComplete={onClose} />
     </div>,
     document.body,
   )

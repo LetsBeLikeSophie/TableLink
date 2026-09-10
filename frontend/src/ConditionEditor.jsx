@@ -31,9 +31,17 @@ export function isClosedSetDomain(domainState) {
   return Boolean(values && values.length > 0 && values.length <= CLOSED_SET_MAX)
 }
 
-/** Operator + value inputs for one condition — shared by the cart row and the
- * inline preview-column popover so both stay in sync automatically. */
-function ConditionEditor({ condition, domainState, onChange }) {
+/**
+ * Operator + value inputs for one condition — shared by the cart row and the
+ * inline preview-column popover so both stay in sync automatically.
+ *
+ * onComplete is optional and only meaningful to a caller that can "close"
+ * (the popover) — the cart row leaves it unset. It fires at the moment a
+ * condition becomes usable on its own: picking a no-value operator, picking
+ * a closed-set value, or committing free text/number entry (blur or Enter,
+ * not every keystroke).
+ */
+function ConditionEditor({ condition, domainState, onChange, onComplete }) {
   const closedSet = isClosedSetDomain(domainState)
   const domainValues = domainState?.data?.values
   // A picked-from-a-list value is either a match or not — LIKE/NULL checks
@@ -44,9 +52,25 @@ function ConditionEditor({ condition, domainState, onChange }) {
       ? `${domainState.data.min} ~ ${domainState.data.max}`
       : '값'
 
+  const handleOperatorChange = (e) => {
+    const operator = e.target.value
+    onChange({ operator, value: '' })
+    if (NO_VALUE_OPERATORS.has(operator)) onComplete?.()
+  }
+
+  const handleClosedSetChange = (e) => {
+    const value = e.target.value
+    onChange({ value })
+    if (value) onComplete?.()
+  }
+
+  const commitTextValue = () => {
+    if (condition.value) onComplete?.()
+  }
+
   return (
     <div className="condition-editor-inputs">
-      <select value={condition.operator} onChange={(e) => onChange({ operator: e.target.value, value: '' })}>
+      <select value={condition.operator} onChange={handleOperatorChange}>
         {operatorChoices.map((op) => (
           <option key={op} value={op}>
             {OPERATOR_LABEL[op] ?? op}
@@ -55,7 +79,7 @@ function ConditionEditor({ condition, domainState, onChange }) {
       </select>
       {!NO_VALUE_OPERATORS.has(condition.operator) &&
         (closedSet ? (
-          <select value={condition.value} onChange={(e) => onChange({ value: e.target.value })}>
+          <select value={condition.value} onChange={handleClosedSetChange}>
             <option value="">선택</option>
             {domainValues.map((v) => (
               <option key={v} value={v}>
@@ -69,6 +93,10 @@ function ConditionEditor({ condition, domainState, onChange }) {
             placeholder={DAY_COUNT_OPERATORS.has(condition.operator) ? 'N일' : rangeHint}
             value={condition.value}
             onChange={(e) => onChange({ value: e.target.value })}
+            onBlur={commitTextValue}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTextValue()
+            }}
           />
         ))}
     </div>
