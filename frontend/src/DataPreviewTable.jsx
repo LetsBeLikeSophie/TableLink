@@ -26,7 +26,7 @@ function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, click
                       type="button"
                       className={`data-preview-th-button ${selected ? 'selected' : ''} ${highlight ? 'onboarding-glow' : ''}`}
                       title="클릭해서 필터 조건 설정"
-                      onClick={(e) => onColumnClick(c, e.currentTarget.getBoundingClientRect())}
+                      onClick={(e) => onColumnClick(c, e.currentTarget.getBoundingClientRect(), e.currentTarget)}
                     >
                       <span className="data-preview-filter-icon">▾</span>
                       {c}

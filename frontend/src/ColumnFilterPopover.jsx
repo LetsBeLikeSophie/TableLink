@@ -11,7 +11,7 @@ const MARGIN = 12
  * raw click coordinate — stays anchored correctly even if the mouse moves
  * before the value is set.
  */
-function ColumnFilterPopover({ anchorRect, condition, domainState, onChange, onRemove, onClose }) {
+function ColumnFilterPopover({ anchorRect, anchorEl, condition, domainState, onChange, onRemove, onClose }) {
   const popoverRef = useRef(null)
   // Render once off-screen to measure actual size, then place it — avoids
   // hardcoding the popover's width/height to keep it clear of the viewport
@@ -40,13 +40,23 @@ function ColumnFilterPopover({ anchorRect, condition, domainState, onChange, onR
 
   useEffect(() => {
     const handlePointerDown = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+      // The trigger button's own onClick already toggles open/closed — if
+      // this "outside click" close also fired for a mousedown on that same
+      // button, openColumn would already be null by the time the click
+      // handler ran, so it'd read as "currently closed" and reopen instead
+      // of staying closed. Excluding the anchor lets the toggle be the only
+      // thing that decides what happens when you click the same field twice.
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target) &&
+        !(anchorEl && anchorEl.contains(e.target))
+      ) {
         onClose()
       }
     }
     document.addEventListener('mousedown', handlePointerDown)
     return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [onClose])
+  }, [onClose, anchorEl])
 
   return createPortal(
     <div className="column-filter-popover" style={style} ref={popoverRef}>

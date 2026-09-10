@@ -125,7 +125,7 @@ function FieldConditionStep({
                     <button
                       type="button"
                       className={`field-search-item-button ${highlight && i === 0 ? 'onboarding-glow' : ''}`}
-                      onClick={(e) => onFieldClick(key, e.currentTarget.getBoundingClientRect())}
+                      onClick={(e) => onFieldClick(key, e.currentTarget.getBoundingClientRect(), e.currentTarget)}
                     >
                       <span className="field-search-item-name">
                         <span className="muted">{f.tableName}.</span>

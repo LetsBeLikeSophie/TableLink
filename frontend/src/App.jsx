@@ -137,7 +137,7 @@ function App() {
   }, [])
 
   const handleColumnClick = useCallback(
-    (qualified, rect) => {
+    (qualified, rect, anchorEl) => {
       if (openColumn?.qualified === qualified) {
         setOpenColumn(null)
         return
@@ -149,7 +149,7 @@ function App() {
         setFieldConditions((prev) => [...prev, { ...meta, operator, value: '' }])
       }
       ensureDomain(meta.tableName, meta.column)
-      setOpenColumn({ qualified, rect })
+      setOpenColumn({ qualified, rect, anchorEl })
     },
     [openColumn, filterableColumnMeta, selectedColumns, ensureDomain],
   )
@@ -268,6 +268,7 @@ function App() {
       {openColumn && openCondition && (
         <ColumnFilterPopover
           anchorRect={openColumn.rect}
+          anchorEl={openColumn.anchorEl}
           condition={openCondition}
           domainState={domains[openColumn.qualified]}
           onChange={(patch) => updateCondition(openCondition.tableName, openCondition.column, patch)}
