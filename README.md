@@ -121,9 +121,7 @@ STATE-HISTORY / HISTORY-HISTORY 세 케이스 분리. 필터 컬럼은 화이트
 ## 로컬 실행
 
 ```bash
-docker run --name tablelink-postgres -e POSTGRES_DB=tablelink \
-  -e POSTGRES_USER=tablelink -e POSTGRES_PASSWORD=tablelink \
-  -p 5432:5432 -d postgres:16
+docker compose up -d                        # Postgres 16
 
 cd backend && ./mvnw spring-boot:run        # 8080
 cd frontend && npm install && npm run dev   # 5173

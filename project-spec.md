@@ -431,3 +431,19 @@ WHERE EXISTS (
 - **HTTPS**: 도메인은 Cloudflare로 관리, DNS는 `itssophie.dev`/`www` A 레코드를 엣지 인스턴스
   공인 IP로 "DNS only"(프록시 끔)로 연결해 certbot HTTP-01 인증이 가능하게 함. 엣지 인스턴스에
   certbot으로 Let's Encrypt 인증서 발급, HTTP→HTTPS 자동 리다이렉트 + 자동 갱신 설정 완료
+
+---
+
+## 12. 유저·국가별 데이터 격리 (Row-Level Security)
+
+로그인(Spring Security, 계정 3개: `kr_user`/`us_user`/`admin`)과 Postgre Row-Level Security
+기반 국가별 데이터 격리 기능. 설계 배경, 트레이드오프, 실무 고려사항은
+[README.md](README.md#유저국가별-데이터-격리-row-level-security)에 정리되어 있음 — 이
+문서에는 핵심만 남김.
+
+- 7개 테이블 전부에 `country` 컬럼 + `FORCE ROW LEVEL SECURITY` 적용 (customer/dealer만으론
+  `/tables/{name}/preview` 같은 조인 엔진 밖 엔드포인트가 안 막혀서 확장)
+- 요청마다 트랜잭션 안에서 `set_config('app.current_country', ?, true)`로 RLS GUC 주입 —
+  `JoinService`/`SegmentService`/`TableMetaService`의 SQL 생성 로직은 country를 모름
+- `admin` 계정은 `COUNTRY_ALL` 권한으로 로그인, RLS 정책의 `OR ... = 'ALL'` 분기로 국가 제한 없이 조회
+- 데이터셋도 KR(한국어)/US(영어) 두 국가로 분리 생성, FK가 서로 겹치지 않게 ID 대역을 나눔
