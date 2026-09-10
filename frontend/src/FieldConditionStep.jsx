@@ -52,7 +52,7 @@ function DomainHint({ domainState, onHover }) {
   )
 }
 
-function FieldConditionStep({ tables, conditions, onConditionsChange, domains, ensureDomain }) {
+function FieldConditionStep({ tables, conditions, onConditionsChange, domains, ensureDomain, highlight }) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -94,7 +94,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
 
   return (
     <div className="field-cart-column">
-        <div className="field-search-panel">
+        <div className={`field-search-panel ${highlight ? 'onboarding-glow' : ''}`}>
           <button
             type="button"
             className="field-search-toggle"

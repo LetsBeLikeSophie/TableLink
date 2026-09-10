@@ -14,9 +14,9 @@ function fieldKey(tableName, column) {
   return `${tableName}.${column}`
 }
 
-function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColumn, onColumnClick }) {
+function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColumn, onColumnClick, highlight }) {
   return (
-    <div className="data-preview-bar">
+    <div className={`data-preview-bar ${highlight ? 'onboarding-glow' : ''}`}>
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
       <div className="data-preview-bar-body">
         {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
@@ -54,7 +54,13 @@ function App() {
   const [chain, setChain] = useState(null) // { rootTable, edges } from the join graph, for /segments
   const [domains, setDomains] = useState({})
   const [openColumn, setOpenColumn] = useState(null) // { qualified, rect } | null
+  const [showOnboarding, setShowOnboarding] = useState(true)
   const requestedDomainsRef = useRef(new Set())
+
+  // First real interaction (either entry point) dismisses the onboarding hint.
+  useEffect(() => {
+    if (fieldConditions.length > 0) setShowOnboarding(false)
+  }, [fieldConditions])
 
   useEffect(() => {
     fetchCurrentUser().then(setUser)
@@ -210,12 +216,25 @@ function App() {
                   실제로 어떤 값이 있는지 볼 수 있어요.
                 </p>
 
+                {showOnboarding && (
+                  <div className="onboarding-tip">
+                    <span>
+                      💡 아래 필드 목록을 클릭하거나, 위 미리보기 표의 컬럼 이름을 눌러서 조건을
+                      담아보세요.
+                    </span>
+                    <button type="button" className="link-button" onClick={() => setShowOnboarding(false)}>
+                      닫기
+                    </button>
+                  </div>
+                )}
+
                 <DataPreviewBar
                   preview={preview}
                   filterableColumns={filterableColumnMeta}
                   selectedColumns={selectedColumns}
                   openColumn={openColumn?.qualified}
                   onColumnClick={handleColumnClick}
+                  highlight={showOnboarding}
                 />
 
                 <div className="condition-join-row">
@@ -225,6 +244,7 @@ function App() {
                     onConditionsChange={setFieldConditions}
                     domains={domains}
                     ensureDomain={ensureDomain}
+                    highlight={showOnboarding}
                   />
                   <JoinGraphStep
                     tables={tables}
