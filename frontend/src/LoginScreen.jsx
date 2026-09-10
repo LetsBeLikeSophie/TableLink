@@ -9,8 +9,8 @@ const DEMO_ACCOUNTS = [
 ]
 
 function LoginScreen({ onLoggedIn }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('tablelink1234')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showIntro, setShowIntro] = useState(true)
@@ -39,8 +39,13 @@ function LoginScreen({ onLoggedIn }) {
             착안했습니다.
           </p>
           <p className="muted">
-            아래 계정 중 하나로 로그인해서 둘러보세요. 로그인 후 "조건 선택" 화면에서 필드
-            목록을 클릭하거나, 미리보기 표의 컬럼 이름을 눌러서 조건을 담아보시면 돼요.
+            아이디에 admin이 기본으로 입력돼 있어요 — 그대로 로그인하면 전체 데이터를 볼 수
+            있고, 국가별로 다른 데이터를 보고 싶으면 아이디를 kr_user 또는 us_user로 바꿔서
+            로그인해보세요 (비밀번호는 동일).
+          </p>
+          <p className="muted">
+            로그인 후 "조건 선택" 화면에서 필드 목록을 클릭하거나, 미리보기 표의 컬럼 이름을
+            눌러서 조건을 담아보시면 돼요.
           </p>
         </Modal>
       )}
