@@ -246,6 +246,8 @@ function App() {
                     domains={domains}
                     ensureDomain={ensureDomain}
                     highlight={showOnboarding}
+                    onFieldClick={handleColumnClick}
+                    openColumn={openColumn?.qualified}
                   />
                   <JoinGraphStep
                     tables={tables}

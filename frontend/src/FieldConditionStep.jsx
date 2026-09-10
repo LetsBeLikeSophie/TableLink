@@ -52,7 +52,16 @@ function DomainHint({ domainState, onHover }) {
   )
 }
 
-function FieldConditionStep({ tables, conditions, onConditionsChange, domains, ensureDomain, highlight }) {
+function FieldConditionStep({
+  tables,
+  conditions,
+  onConditionsChange,
+  domains,
+  ensureDomain,
+  highlight,
+  onFieldClick,
+  openColumn,
+}) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -74,13 +83,6 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
 
   const isSelected = (tableName, column) =>
     conditions.some((c) => c.tableName === tableName && c.column === column)
-
-  const addField = (field) => {
-    if (isSelected(field.tableName, field.column)) return
-    const operator = OPERATORS_BY_VALUE_TYPE[field.valueType][0]
-    onConditionsChange([...conditions, { ...field, operator, value: '' }])
-    ensureDomain(field.tableName, field.column)
-  }
 
   const removeField = (tableName, column) => {
     onConditionsChange(conditions.filter((c) => !(c.tableName === tableName && c.column === column)))
@@ -116,13 +118,14 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
             {filteredFields.map((f, i) => {
               const selected = isSelected(f.tableName, f.column)
               const key = fieldKey(f.tableName, f.column)
+              const open = openColumn === key
               return (
                 <li key={key}>
-                  <div className={`field-search-item ${selected ? 'selected' : ''}`}>
+                  <div className={`field-search-item ${selected ? 'selected' : ''} ${open ? 'open' : ''}`}>
                     <button
                       type="button"
                       className={`field-search-item-button ${highlight && i === 0 ? 'onboarding-glow' : ''}`}
-                      onClick={() => (selected ? removeField(f.tableName, f.column) : addField(f))}
+                      onClick={(e) => onFieldClick(key, e.currentTarget.getBoundingClientRect())}
                     >
                       <span className="field-search-item-name">
                         <span className="muted">{f.tableName}.</span>

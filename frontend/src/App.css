@@ -230,6 +230,7 @@
 .column-filter-popover {
   z-index: 200;
   width: 260px;
+  max-width: calc(100vw - 24px);
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -238,13 +239,26 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
 }
 
 .column-filter-popover-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
+}
+
+.column-filter-popover-header .mono {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-filter-popover-header .link-button {
+  flex-shrink: 0;
 }
 
 .condition-join-row {
@@ -881,6 +895,11 @@
   background: var(--accent-bg);
   border-color: var(--accent-border);
   color: var(--text-h);
+}
+
+.field-search-item.open {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .field-search-item-name {
