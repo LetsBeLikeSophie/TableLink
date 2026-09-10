@@ -5,7 +5,7 @@ function formatCell(value) {
   return String(value)
 }
 
-function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, clickableColumns, openColumn }) {
+function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, clickableColumns, openColumn, highlight }) {
   if (!columns || columns.length === 0) {
     return <div className="empty-box">컬럼 정보가 없습니다.</div>
   }
@@ -24,7 +24,7 @@ function DataPreviewTable({ columns, rows, onColumnClick, selectedColumns, click
                   {clickable ? (
                     <button
                       type="button"
-                      className={`data-preview-th-button ${selected ? 'selected' : ''}`}
+                      className={`data-preview-th-button ${selected ? 'selected' : ''} ${highlight ? 'onboarding-glow' : ''}`}
                       title="클릭해서 필터 조건 설정"
                       onClick={(e) => onColumnClick(c, e.currentTarget.getBoundingClientRect())}
                     >

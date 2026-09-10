@@ -192,15 +192,22 @@
 }
 
 .onboarding-glow {
-  animation: onboarding-pulse 1.8s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+  border-radius: 6px;
+  outline: 2px solid rgba(170, 59, 255, 0.9);
+  outline-offset: 2px;
+  animation: onboarding-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes onboarding-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(170, 59, 255, 0.35);
+    box-shadow: 0 0 0 0 rgba(170, 59, 255, 0.55);
+    outline-color: rgba(170, 59, 255, 0.9);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(170, 59, 255, 0);
+    box-shadow: 0 0 10px 5px rgba(170, 59, 255, 0.45);
+    outline-color: rgba(170, 59, 255, 0.4);
   }
 }
 

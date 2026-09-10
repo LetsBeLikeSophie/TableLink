@@ -16,7 +16,7 @@ function fieldKey(tableName, column) {
 
 function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColumn, onColumnClick, highlight }) {
   return (
-    <div className={`data-preview-bar ${highlight ? 'onboarding-glow' : ''}`}>
+    <div className="data-preview-bar">
       <h3>{preview?.title ? `데이터 미리보기 · ${preview.title}` : '데이터 미리보기'}</h3>
       <div className="data-preview-bar-body">
         {!preview && <div className="empty-box">조건을 담아 테이블이 연결되면 표시됩니다.</div>}
@@ -34,6 +34,7 @@ function DataPreviewBar({ preview, filterableColumns, selectedColumns, openColum
               clickableColumns={filterableColumns}
               openColumn={openColumn}
               onColumnClick={onColumnClick}
+              highlight={highlight}
             />
           </>
         )}

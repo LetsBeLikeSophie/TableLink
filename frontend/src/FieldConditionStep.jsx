@@ -94,10 +94,10 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
 
   return (
     <div className="field-cart-column">
-        <div className={`field-search-panel ${highlight ? 'onboarding-glow' : ''}`}>
+        <div className="field-search-panel">
           <button
             type="button"
-            className="field-search-toggle"
+            className={`field-search-toggle ${highlight ? 'onboarding-glow' : ''}`}
             onClick={() => setSearchOpen((o) => !o)}
             aria-expanded={searchOpen}
           >
@@ -113,7 +113,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
             onChange={(e) => setQuery(e.target.value)}
           />
           <ul className="field-search-list">
-            {filteredFields.map((f) => {
+            {filteredFields.map((f, i) => {
               const selected = isSelected(f.tableName, f.column)
               const key = fieldKey(f.tableName, f.column)
               return (
@@ -121,7 +121,7 @@ function FieldConditionStep({ tables, conditions, onConditionsChange, domains, e
                   <div className={`field-search-item ${selected ? 'selected' : ''}`}>
                     <button
                       type="button"
-                      className="field-search-item-button"
+                      className={`field-search-item-button ${highlight && i === 0 ? 'onboarding-glow' : ''}`}
                       onClick={() => (selected ? removeField(f.tableName, f.column) : addField(f))}
                     >
                       <span className="field-search-item-name">
