@@ -162,7 +162,7 @@
 
 .content {
   flex: 1;
-  padding: 32px;
+  padding: 32px 32px 72px;
 }
 
 .content-error {
@@ -556,6 +556,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* .join-builder-embedded switches to flex-direction: column, which flips
+   flex-basis from a width hint to a height one — the 360px above then
+   reserves that much vertical space regardless of actual content, leaving
+   a visible gap below the (shorter) compact canvas. Not meaningful on the
+   main axis here, so drop it back to content-sized in embedded mode. */
+.join-builder-embedded .join-canvas-column {
+  flex: 1 1 auto;
 }
 
 .join-canvas {
@@ -1097,7 +1106,7 @@
   }
 
   .content {
-    padding: 16px;
+    padding: 16px 16px 56px;
   }
 
   .content-error {
