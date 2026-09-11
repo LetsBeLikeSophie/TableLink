@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { runSegment } from './api'
-import { toActiveFilters } from './conditionUtils'
+import { toActiveFilters, formatConditionPhrase } from './conditionUtils'
 import DataPreviewTable from './DataPreviewTable'
 
 function ResultsStep({ chain, conditions }) {
@@ -41,6 +41,11 @@ function ResultsStep({ chain, conditions }) {
 
       {result && !loading && !error && (
         <>
+          <p className="segment-condition-summary">
+            {activeFilters.length === 0
+              ? '조건 없이 전체 대상을 보여줍니다.'
+              : `${activeFilters.map(formatConditionPhrase).join(', ')} 조건을 만족하는 대상입니다.`}
+          </p>
           <div className="segment-summary">
             <div className="segment-summary-stat">
               <span className="segment-summary-number">{result.matchedCount.toLocaleString()}</span>

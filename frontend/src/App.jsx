@@ -242,7 +242,6 @@ function App() {
                   <FieldConditionStep
                     tables={tables}
                     conditions={fieldConditions}
-                    onConditionsChange={setFieldConditions}
                     domains={domains}
                     ensureDomain={ensureDomain}
                     highlight={showOnboarding}

@@ -814,14 +814,6 @@
   opacity: 0.6;
 }
 
-.field-cart-column {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
 .field-search-panel {
   width: 270px;
   flex-shrink: 0;
@@ -963,44 +955,6 @@
   white-space: normal;
 }
 
-.field-cart-panel {
-  width: 260px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.field-cart-panel h3 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.field-cart-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.field-cart-row {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.field-cart-row-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-}
-
 .condition-editor-inputs {
   display: flex;
   gap: 8px;
@@ -1097,6 +1051,12 @@
   cursor: pointer;
 }
 
+.segment-condition-summary {
+  margin: 0 0 12px;
+  color: var(--text-h);
+  font-size: 14px;
+}
+
 .segment-summary {
   display: flex;
   align-items: baseline;
@@ -1148,13 +1108,7 @@
     flex-direction: column;
   }
 
-  .field-cart-column {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .field-search-panel,
-  .field-cart-panel {
+  .field-search-panel {
     width: 100%;
   }
 
