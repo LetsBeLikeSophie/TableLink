@@ -176,7 +176,7 @@ function App() {
           <button
             type="button"
             className="link-button"
-            onClick={() => logout().then(() => setUser(null))}
+            onClick={() => logout().then(() => window.location.reload())}
           >
             로그아웃
           </button>
