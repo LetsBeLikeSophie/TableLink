@@ -101,6 +101,17 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
       })),
     [plan.edges, latestOnlyOverrides],
   )
+  // `edges` gets a new array identity on basically every keystroke — it's
+  // downstream of `conditions` via requiredTables -> plan -> edges, and each
+  // of those useMemos only skips recomputing when its own dependency is
+  // reference-equal, so a new `fieldConditions` array (any add/remove/edit)
+  // cascades into a new `edges` array even when the actual join shape is
+  // unchanged. Effects that only care about the join shape key off this
+  // serialized form instead of `edges` itself.
+  const edgesKey = useMemo(
+    () => JSON.stringify(edges.map((e) => [e.fromTable, e.toTable, e.latestOnly])),
+    [edges],
+  )
 
   // Assign a canvas position the first time a table appears in the plan.
   useEffect(() => {
@@ -201,6 +212,14 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
   }
 
   const activeFilters = useMemo(() => toActiveFilters(conditions), [conditions])
+  // Clicking a field to open its popover adds it to `conditions` with an
+  // empty value right away, which gives `activeFilters` a new array identity
+  // even though toActiveFilters still filters it out (no value yet) — every
+  // such click was re-triggering the debounced fetch below for no actual
+  // change in what gets sent to the backend. Keying off the serialized
+  // content instead of the array reference means the effect only re-runs
+  // when a filter's actual value (or presence) changes.
+  const activeFiltersKey = useMemo(() => JSON.stringify(activeFilters), [activeFilters])
 
   const rootTable = plan.tables[0] ?? null
 
@@ -226,7 +245,8 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
         .finally(() => setPreviewLoading(false))
     }, 400)
     return () => clearTimeout(timer)
-  }, [rootTable, edges, activeFilters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- edgesKey/activeFiltersKey stand in for edges/activeFilters
+  }, [rootTable, edgesKey, activeFiltersKey])
 
   // Hand the resolved chain (not just the preview data) up so the results
   // step can run the same join+filters through /segments without having to
@@ -238,7 +258,8 @@ function JoinBuilder({ tables, initialTables, conditions, onPreviewChange, onCha
       rootTable,
       edges: edges.map((e) => ({ fromTable: e.fromTable, toTable: e.toTable, latestOnly: e.latestOnly })),
     })
-  }, [rootTable, edges, onChainChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- edgesKey stands in for edges
+  }, [rootTable, edgesKey, onChainChange])
 
   useEffect(() => {
     if (!onPreviewChange) return
